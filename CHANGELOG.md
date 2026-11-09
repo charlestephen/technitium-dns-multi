@@ -12,3 +12,7 @@
 - `PGBOUNCER_DATABASES` accepts several entries separated by `;`.
 - Added acme.sh back: pinned release install, DNS-01 issuance, PKCS#12 output for Technitium.
 - PgBouncer documentation uses logical database names (`dns`, `dhcp`).
+- dnsdist now serves plain DNS, DoT, DoH and DoQ with the supplied PEM certificate; it is installed from PowerDNS's repository (2.1.3) because Ubuntu's 1.8.x has no DoQ.
+- dnsdist talks to Technitium with the PROXY protocol so Technitium sees real client addresses; Technitium's own DoT/DoH/DoQ listeners are disabled.
+- acme.sh restarts dnsdist after each issue or renewal; build asserts libmsquic, dig and dnsdist QUIC support.
+- Added a Requirements section to the README.

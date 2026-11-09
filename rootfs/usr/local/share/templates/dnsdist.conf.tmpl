@@ -1,5 +1,11 @@
+-- Plain DNS (UDP and TCP)
 setLocal("${DNSDIST_LISTEN}")
 setACL({${DNSDIST_ACL_LUA}})
+
+-- Encrypted DNS (DoT, DoH, DoQ); empty when no certificate is available
+${DNSDIST_TLS_LUA}
+
+-- Backends
 ${DNSDIST_BACKEND_LUA}
 
 pc = newPacketCache(${DNSDIST_CACHE_ENTRIES}, {maxTTL=86400, minTTL=0, temporaryFailureTTL=60, staleTTL=60})

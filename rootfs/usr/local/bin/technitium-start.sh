@@ -1,8 +1,10 @@
 #!/bin/sh
-# Run Technitium and, when dnsdist fronts it, move Technitium off port 53.
-# Technitium has no environment variable for its DNS listen address, so it is set
-# through the settings API once the web service is up. The value is persisted in
-# /etc/dns, so later boots find it already applied.
+# Run Technitium and, when dnsdist fronts it, configure it through the settings API:
+#  - move the plain DNS listener off port 53 (TECHNITIUM_DNS_LISTEN)
+#  - accept PROXY protocol from dnsdist on TECHNITIUM_PROXY_PORT so query logs, ACLs
+#    and per-client blocking see the real client address
+#  - turn off Technitium's own DoT/DoH/DoQ listeners, which dnsdist serves instead
+# Technitium has no environment variables for these, and persists them in /etc/dns.
 set -u
 
 dotnet /opt/technitium/dns/DnsServerApp.dll /etc/dns &
@@ -27,12 +29,17 @@ move_dns_listener() {
         i=$((i + 1)); sleep 2
     done
     [ -n "${token:-}" ] || { echo "technitium-start: API login failed" >&2; return 1; }
-    if curl -fsS -G "$api/settings/get" --data-urlencode "token=$token" | grep -q "\"$TECHNITIUM_DNS_LISTEN\""; then
-        return 0
-    fi
     curl -fsS -G "$api/settings/set" --data-urlencode "token=$token" \
-        --data-urlencode "dnsServerLocalEndPoints=$TECHNITIUM_DNS_LISTEN" >/dev/null \
-        && echo "technitium-start: DNS listener set to $TECHNITIUM_DNS_LISTEN"
+        --data-urlencode "dnsServerLocalEndPoints=$TECHNITIUM_DNS_LISTEN" \
+        --data-urlencode "enableDnsOverUdpProxy=true" \
+        --data-urlencode "enableDnsOverTcpProxy=true" \
+        --data-urlencode "dnsOverUdpProxyPort=$TECHNITIUM_PROXY_PORT" \
+        --data-urlencode "dnsOverTcpProxyPort=$TECHNITIUM_PROXY_PORT" \
+        --data-urlencode "dnsReverseProxyNetworkACL=$TECHNITIUM_PROXY_ACL" \
+        --data-urlencode "enableDnsOverTls=false" \
+        --data-urlencode "enableDnsOverHttps=false" \
+        --data-urlencode "enableDnsOverQuic=false" >/dev/null \
+        && echo "technitium-start: DNS on $TECHNITIUM_DNS_LISTEN, PROXY protocol on port $TECHNITIUM_PROXY_PORT"
 }
 
 if [ "${ENABLE_DNSDIST:-true}" = "true" ]; then

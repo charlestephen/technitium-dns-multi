@@ -7,7 +7,7 @@ A single container that bundles a highly available DNS stack around
 |---|---|
 | [Technitium DNS Server](https://technitium.com/dns/) | Authoritative and recursive DNS, DHCP, web console |
 | [Technitium Console](https://github.com/byGarcia/technitium-console) | Alternative web UI (served from Technitium's web folder) |
-| [dnsdist](https://dnsdist.org/) | Listens on port 53, caches, applies ACL/rate limits, load balances across backends |
+| [dnsdist](https://dnsdist.org/) | Front end for plain DNS, DNS over TLS, DNS over HTTPS and DNS over QUIC; caches, applies ACL/rate limits, load balances across backends |
 | [keepalived](https://www.keepalived.org/) | VRRP virtual IP that fails over when the local DNS path stops answering |
 | [acme.sh](https://github.com/acmesh-official/acme.sh) | Optional DNS-01 certificate issue and renewal, published as a PKCS#12 file |
 | [PgBouncer](https://www.pgbouncer.org/) | Optional PostgreSQL connection pooler |
@@ -21,12 +21,21 @@ Images: [`ghcr.io/charlestephen/technitium-dns-multi`](https://github.com/charle
 ## How it fits together
 
 ```
-client ──► VIP (keepalived) ──► dnsdist :53 ──► Technitium 127.0.0.1:5353
+                         ┌─ 53  UDP/TCP  plain DNS
+client ─► VIP ─► dnsdist ├─ 853 TCP      DNS over TLS   ─┐
+ (keepalived)            ├─ 853 UDP      DNS over QUIC  ─┼─► Technitium 127.0.0.1:538 (PROXY protocol)
+                         └─ 443 TCP      DNS over HTTPS ─┘
 ```
 
-Technitium has no environment variable for its DNS listen address, so on start the container logs in to the
-Technitium API and sets `TECHNITIUM_DNS_LISTEN` (default `127.0.0.1:5353`). This needs `DNS_SERVER_ADMIN_PASSWORD`.
-Until that has happened on first boot, dnsdist cannot bind port 53 and is restarted by supervisord.
+dnsdist terminates all client-facing DNS protocols and forwards queries to Technitium as plain DNS on the loopback
+interface. It uses the PROXY protocol, so Technitium's query logs, ACLs and per-client blocking see the real client
+address instead of `127.0.0.1`.
+
+Technitium has no environment variables for its listen address, PROXY protocol or encrypted listeners. On start the
+container logs in to the Technitium API and applies them (see `TECHNITIUM_DNS_LISTEN`, `TECHNITIUM_PROXY_PORT`,
+`TECHNITIUM_PROXY_ACL`). This needs `DNS_SERVER_ADMIN_PASSWORD` or `DNS_SERVER_ADMIN_PASSWORD_FILE`. It also turns
+off Technitium's own DoT, DoH and DoQ listeners, which would otherwise collide with dnsdist on ports 853 and 443.
+Until this has happened on first boot, dnsdist cannot bind port 53 and is restarted by supervisord.
 
 Run multiple nodes with the same `KEEPALIVED_VIP` and `KEEPALIVED_VRID` and different `KEEPALIVED_PRIORITY`.
 
@@ -88,7 +97,9 @@ Set variables with `--env-file .env` or `-e`. [.env.example](.env.example) lists
 
 | Variable | Default | Description |
 |---|---|---|
-| `TECHNITIUM_DNS_LISTEN` | `127.0.0.1:5353` | Address and port Technitium listens on for DNS when `ENABLE_DNSDIST=true`. Applied through the Technitium API; needs `DNS_SERVER_ADMIN_PASSWORD` or `DNS_SERVER_ADMIN_PASSWORD_FILE`. |
+| `TECHNITIUM_DNS_LISTEN` | `127.0.0.1:5353` | Address and port Technitium listens on for plain DNS when `ENABLE_DNSDIST=true`. Applied through the Technitium API; needs `DNS_SERVER_ADMIN_PASSWORD` or `DNS_SERVER_ADMIN_PASSWORD_FILE`. |
+| `TECHNITIUM_PROXY_PORT` | `538` | TCP and UDP port on which Technitium accepts PROXY protocol connections from dnsdist. Must match the port in `DNSDIST_BACKENDS`. |
+| `TECHNITIUM_PROXY_ACL` | `127.0.0.1` | Comma separated addresses or networks allowed to connect to the PROXY port (`dnsReverseProxyNetworkACL`). |
 | `DNS_SERVER_WEB_SERVICE_WWW_FOLDER_PATH` | `/opt/technitium-console` | Folder Technitium serves as its web console. The default is the bundled Technitium Console; point it at another folder to serve a different console. |
 
 ### Technitium (upstream variables)
@@ -155,7 +166,17 @@ These are passed straight to Technitium. Upstream reads them [only when the DNS 
 | Variable | Default | Description |
 |---|---|---|
 | `DNSDIST_LISTEN` | `0.0.0.0:53` | Address and port dnsdist listens on. |
-| `DNSDIST_BACKENDS` | `127.0.0.1:5353` | Comma separated `address:port` list of backend DNS servers. |
+| `DNSDIST_BACKENDS` | `127.0.0.1:538` | Comma separated `address:port` list of backend DNS servers. The default is Technitium's PROXY protocol port. |
+| `DNSDIST_BACKEND_PROXY_PROTOCOL` | `true` | Send the PROXY protocol header to every backend. Set `false` for backends that do not accept it. |
+| `DNSDIST_ENABLE_DOT` | `true` | Serve DNS over TLS. Needs a certificate. |
+| `DNSDIST_ENABLE_DOH` | `true` | Serve DNS over HTTPS. Needs a certificate. |
+| `DNSDIST_ENABLE_DOQ` | `true` | Serve DNS over QUIC. Needs a certificate. |
+| `DNSDIST_DOT_LISTEN` | `0.0.0.0:853` | DoT address and TCP port. |
+| `DNSDIST_DOH_LISTEN` | `0.0.0.0:443` | DoH address and TCP port. |
+| `DNSDIST_DOH_PATH` | `/dns-query` | URL path that accepts DoH queries. |
+| `DNSDIST_DOQ_LISTEN` | `0.0.0.0:853` | DoQ address and UDP port. |
+| `DNSDIST_TLS_CERT` | `/etc/dns/certs/fullchain.pem` | Certificate chain in PEM format, used for DoT, DoH and DoQ. |
+| `DNSDIST_TLS_KEY` | `/etc/dns/certs/key.pem` | Private key in PEM format. |
 | `DNSDIST_ACL` | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` | Comma separated networks allowed to query. |
 | `DNSDIST_CACHE_ENTRIES` | `100000` | Packet cache size in entries. |
 | `DNSDIST_MAX_QPS_PER_IP` | `0` | Queries per second allowed per client address; `0` disables the limit. |
@@ -217,18 +238,24 @@ Config templates are in `rootfs/usr/local/share/templates`. Mount a directory ov
 
 ## Certificates
 
-Either supply your own certificate or let the container obtain one with [acme.sh](https://github.com/acmesh-official/acme.sh).
+Two consumers need a certificate, in different formats:
 
-**Your own:** mount a PKCS#12 file (for example at `/etc/dns/certs/technitium.pfx`).
+| Consumer | Used for | Format | Setting |
+|---|---|---|---|
+| dnsdist | DoT, DoH, DoQ | PEM certificate chain and PEM private key | `DNSDIST_TLS_CERT`, `DNSDIST_TLS_KEY` |
+| Technitium | Web console over HTTPS | PKCS#12 (`.pfx`) | `DNS_SERVER_WEB_SERVICE_TLS_CERTIFICATE_PATH`, `DNS_SERVER_WEB_SERVICE_TLS_CERTIFICATE_PASSWORD` |
+
+**Your own certificate:** mount the PEM files where `DNSDIST_TLS_CERT` and `DNSDIST_TLS_KEY` point (by default
+`/etc/dns/certs/fullchain.pem` and `/etc/dns/certs/key.pem`). For the Technitium web console also mount a PKCS#12 file and
+set `DNS_SERVER_WEB_SERVICE_ENABLE_HTTPS=true` and the two variables above. dnsdist reads the files only when it starts,
+so restart the container (or `supervisorctl restart dnsdist` inside it) after replacing them. If the files are missing at start,
+dnsdist logs a message and serves plain DNS only.
 
 **acme.sh:** set `ENABLE_ACME=true`, `ACME_DOMAINS`, `ACME_DNS_PROVIDER` and that provider's credential variables
-(for example `CF_Token`). Issuance uses the DNS-01 challenge. The certificate is written to
-`/etc/dns/certs/technitium.pfx`, protected by `ACME_PFX_PASSWORD`, and renewal is checked every 12 hours.
-Keep `/var/lib/acme.sh` on a volume so the account and certificates survive restarts.
-
-Either way, point Technitium at the file with `DNS_SERVER_WEB_SERVICE_ENABLE_HTTPS=true`,
-`DNS_SERVER_WEB_SERVICE_TLS_CERTIFICATE_PATH` and `DNS_SERVER_WEB_SERVICE_TLS_CERTIFICATE_PASSWORD`. For DoT/DoH set
-the certificate path in the DNS settings.
+(for example `CF_Token`). Issuance uses the DNS-01 challenge. After each issue or renewal the container writes
+`/etc/dns/certs/fullchain.pem`, `key.pem` and `technitium.pfx` (protected by `ACME_PFX_PASSWORD`) and restarts dnsdist, which
+briefly interrupts DNS on that node. Renewal is checked every 12 hours. Keep `/var/lib/acme.sh` on a volume so the account
+and certificates survive restarts.
 
 ## PgBouncer
 
@@ -244,6 +271,23 @@ PGBOUNCER_DATABASES=dns = host=10.0.0.5 port=5432 dbname=technitium; dhcp = host
 
 Clients connect to `PGBOUNCER_LISTEN_PORT` (default 6432) and use the logical name (`dns` or `dhcp`) as the database
 name. The real database name, host and port can then change without touching the clients.
+
+## Requirements
+
+- **Capabilities:** `NET_ADMIN` (keepalived adds the virtual IP), `NET_RAW` (VRRP and DHCP raw sockets) and
+  `NET_BIND_SERVICE` (ports below 1024).
+- **Networking:** DHCP and VRRP need layer 2 access to the LAN: use macvlan or host networking.
+- **Ports:** 53 UDP/TCP (DNS), 853 TCP (DoT), 853 UDP (DoQ), 443 TCP (DoH), 5380/53443 TCP (Technitium web console),
+  67 UDP (DHCP), 6432 TCP (PgBouncer), 8000 TCP (Kea control agent, peer only).
+- **QUIC:** DoQ needs UDP 853 to be reachable. Technitium uses `libmsquic`, which the upstream Technitium image installs, for
+  outbound DNS over QUIC (for example `DNS_SERVER_FORWARDER_PROTOCOL=Quic`). The build verifies that it is present.
+- **Technitium encrypted DNS:** leave Technitium's own DoT, DoH and DoQ listeners off. The container disables them, and
+  dnsdist serves those protocols on the same ports.
+- **Admin password:** `DNS_SERVER_ADMIN_PASSWORD` (or `_FILE`) must stay set while `ENABLE_DNSDIST=true`, because the container logs in to
+  the Technitium API on every start.
+- **Clocks:** Kea HA needs the two nodes' clocks to agree within a few seconds. Keep NTP running on the hosts.
+- **PgBouncer:** the file at `PGBOUNCER_AUTH_FILE` must exist and be readable by the `postgres` user inside the container.
+- **Volumes:** persist `/etc/dns` (Technitium state and certificates), `/var/lib/acme.sh` and `/var/lib/kea`.
 
 ## Kea DHCP (HA load balancing)
 
@@ -263,14 +307,18 @@ disabled (both would answer on UDP 67).
 podman build -f Containerfile -t technitium-dns-multi .
 ```
 
-Upstream versions are build arguments: `TECHNITIUM_VERSION`, `CONSOLE_VERSION`, `ACMESH_VERSION`.
+Upstream versions are build arguments: `TECHNITIUM_VERSION`, `CONSOLE_VERSION`, `ACMESH_VERSION`, `DNSDIST_VERSION` and `DNSDIST_SERIES`.
+
+dnsdist is installed from PowerDNS's own apt repository (`repo.powerdns.com`), not from Ubuntu: the Ubuntu package is 1.8.x and
+has no DNS over QUIC. `DNSDIST_VERSION` is the release (matching the `powerdns/dnsdist-<series>` container tag) and
+`DNSDIST_SERIES` selects the repository (`21` for 2.1.x). The build fails if `libmsquic`, `dig` or QUIC support in dnsdist is missing.
 
 ## CI
 
 - `build.yml`: multi-arch build, push to GHCR and Docker Hub, SBOM and provenance, Trivy image scan to code scanning.
   Runs on push to `main`, on `v*` tags, weekly (to pick up distro security updates) and on demand.
 - `security.yml`: hadolint, shellcheck and a Trivy repository scan (secrets, misconfiguration, vulnerabilities) daily.
-- `renovate.json`: Renovate raises and auto-merges pull requests for new Technitium, Technitium Console and acme.sh
+- `renovate.json`: Renovate raises and auto-merges pull requests for new Technitium, Technitium Console, dnsdist and acme.sh
   releases and for GitHub Action updates (pinned by commit SHA). A merge to `main` triggers `build.yml`.
 
 Required repository settings: variable `DOCKERHUB_USERNAME`, secret `DOCKERHUB_TOKEN`, the Renovate GitHub App

@@ -6,16 +6,7 @@ T=/usr/local/share/templates
 OUT=/run/conf
 mkdir -p "$OUT" /run/kea /run/postgresql /var/lib/kea /var/log/postgresql
 chown postgres:postgres /run/postgresql /var/log/postgresql
-
-# "a,b, c" -> list with one quoted item per element: "a","b","c"
-quote_list() { printf '%s' "$1" | tr -d ' ' | sed 's/,/","/g; s/^/"/; s/$/"/'; }
-
-# --- dnsdist ---------------------------------------------------------------
-DNSDIST_ACL_LUA=$(quote_list "$DNSDIST_ACL")
-DNSDIST_BACKEND_LUA=$(printf '%s' "$DNSDIST_BACKENDS" | tr -d ' ' | tr ',' '\n' \
-    | awk 'NF { printf "newServer({address=\"%s\", name=\"backend%d\"})\n", $1, NR }')
-export DNSDIST_ACL_LUA DNSDIST_BACKEND_LUA
-envsubst < "$T/dnsdist.conf.tmpl" > "$OUT/dnsdist.conf"
+chmod 750 /run/kea /var/lib/kea
 
 # --- keepalived ------------------------------------------------------------
 KEEPALIVED_UNICAST_BLOCK=""

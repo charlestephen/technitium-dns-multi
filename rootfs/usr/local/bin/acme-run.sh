@@ -30,7 +30,7 @@ first=${ACME_DOMAINS%%,*}
 "$ACME" $H --install-cert -d "$first" --ecc \
     --key-file "$CERT_DIR/key.pem" \
     --fullchain-file "$CERT_DIR/fullchain.pem" \
-    --reloadcmd "openssl pkcs12 -export -inkey $CERT_DIR/key.pem -in $CERT_DIR/fullchain.pem -out $CERT_DIR/technitium.pfx -passout env:ACME_PFX_PASSWORD"
+    --reloadcmd "/usr/local/bin/acme-deploy.sh"
 
 while :; do
     sleep 43200
