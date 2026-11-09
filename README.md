@@ -9,6 +9,7 @@ A single container that bundles a highly available DNS stack around
 | [Technitium Console](https://github.com/byGarcia/technitium-console) | Alternative web UI (served from Technitium's web folder) |
 | [dnsdist](https://dnsdist.org/) | Listens on port 53, caches, applies ACL/rate limits, load balances across backends |
 | [keepalived](https://www.keepalived.org/) | VRRP virtual IP that fails over when the local DNS path stops answering |
+| [acme.sh](https://github.com/acmesh-official/acme.sh) | Optional DNS-01 certificate issue and renewal, published as a PKCS#12 file |
 | [PgBouncer](https://www.pgbouncer.org/) | Optional PostgreSQL connection pooler |
 | [Kea DHCPv4](https://www.isc.org/kea/) | Optional DHCP with HA load balancing between two nodes |
 
@@ -48,6 +49,7 @@ sudo podman run -d --name technitium-dns-multi --hostname technitium-dns-multi \
   --cap-add NET_ADMIN --cap-add NET_RAW --cap-add NET_BIND_SERVICE \
   --env-file .env \
   -v dns-config:/etc/dns \
+  -v acme:/var/lib/acme.sh \
   -v kea:/var/lib/kea \
   ghcr.io/charlestephen/technitium-dns-multi:latest
 ```
@@ -80,6 +82,7 @@ Set variables with `--env-file .env` or `-e`. [.env.example](.env.example) lists
 | `ENABLE_KEEPALIVED` | `true` | Run keepalived and manage the virtual IP. |
 | `ENABLE_PGBOUNCER` | `false` | Run PgBouncer. |
 | `ENABLE_KEA` | `false` | Run Kea DHCPv4 and the Kea control agent. |
+| `ENABLE_ACME` | `false` | Run acme.sh certificate issue and renewal. |
 
 ### Technitium (image settings)
 
@@ -183,6 +186,16 @@ These are passed straight to Technitium. Upstream reads them [only when the DNS 
 | `PGBOUNCER_MAX_CLIENT_CONN` | `1000` | Maximum client connections. |
 | `PGBOUNCER_DEFAULT_POOL_SIZE` | `20` | Server connections per user/database pair. |
 
+### acme.sh
+
+| Variable | Default | Description |
+|---|---|---|
+| `ACME_DOMAINS` | empty | Comma separated domain names. The first is the certificate name. Required when `ENABLE_ACME=true`. |
+| `ACME_DNS_PROVIDER` | empty | acme.sh [`dnsapi`](https://github.com/acmesh-official/acme.sh/wiki/dnsapi) name, for example `dns_cf`. Required when `ENABLE_ACME=true`. The provider's own credential variables (for example `CF_Token`) are read by acme.sh from the environment. |
+| `ACME_EMAIL` | empty | Account email address. |
+| `ACME_SERVER` | `letsencrypt` | ACME CA name or directory URL. |
+| `ACME_PFX_PASSWORD` | empty | Password for the generated PKCS#12 file. |
+
 ### Kea DHCPv4
 
 | Variable | Default | Description |
@@ -204,8 +217,16 @@ Config templates are in `rootfs/usr/local/share/templates`. Mount a directory ov
 
 ## Certificates
 
-The image does not issue certificates. Mount your own PKCS#12 file (for example at `/etc/dns/certs/technitium.pfx`)
-and point Technitium at it with `DNS_SERVER_WEB_SERVICE_ENABLE_HTTPS=true`,
+Either supply your own certificate or let the container obtain one with [acme.sh](https://github.com/acmesh-official/acme.sh).
+
+**Your own:** mount a PKCS#12 file (for example at `/etc/dns/certs/technitium.pfx`).
+
+**acme.sh:** set `ENABLE_ACME=true`, `ACME_DOMAINS`, `ACME_DNS_PROVIDER` and that provider's credential variables
+(for example `CF_Token`). Issuance uses the DNS-01 challenge. The certificate is written to
+`/etc/dns/certs/technitium.pfx`, protected by `ACME_PFX_PASSWORD`, and renewal is checked every 12 hours.
+Keep `/var/lib/acme.sh` on a volume so the account and certificates survive restarts.
+
+Either way, point Technitium at the file with `DNS_SERVER_WEB_SERVICE_ENABLE_HTTPS=true`,
 `DNS_SERVER_WEB_SERVICE_TLS_CERTIFICATE_PATH` and `DNS_SERVER_WEB_SERVICE_TLS_CERTIFICATE_PASSWORD`. For DoT/DoH set
 the certificate path in the DNS settings.
 
@@ -213,15 +234,16 @@ the certificate path in the DNS settings.
 
 Set `ENABLE_PGBOUNCER=true`, `PGBOUNCER_DATABASES` and mount a `userlist.txt` at `PGBOUNCER_AUTH_FILE`.
 
-`PGBOUNCER_DATABASES` lists the databases PgBouncer proxies, written as PgBouncer
+`PGBOUNCER_DATABASES` maps logical database names to real PostgreSQL databases, written as PgBouncer
 [`[databases]`](https://www.pgbouncer.org/config.html#section-databases) entries (`name = connection parameters`).
 Separate several entries with `;`:
 
 ```sh
-PGBOUNCER_DATABASES=app = host=10.0.0.5 port=5432 dbname=app; reports = host=10.0.0.6 port=5432 dbname=reports
+PGBOUNCER_DATABASES=dns = host=10.0.0.5 port=5432 dbname=technitium; dhcp = host=10.0.0.5 port=5432 dbname=kea
 ```
 
-Clients connect to port `PGBOUNCER_LISTEN_PORT` (default 6432) using the name on the left.
+Clients connect to `PGBOUNCER_LISTEN_PORT` (default 6432) and use the logical name (`dns` or `dhcp`) as the database
+name. The real database name, host and port can then change without touching the clients.
 
 ## Kea DHCP (HA load balancing)
 
@@ -241,14 +263,14 @@ disabled (both would answer on UDP 67).
 podman build -f Containerfile -t technitium-dns-multi .
 ```
 
-Upstream versions are build arguments: `TECHNITIUM_VERSION`, `CONSOLE_VERSION`.
+Upstream versions are build arguments: `TECHNITIUM_VERSION`, `CONSOLE_VERSION`, `ACMESH_VERSION`.
 
 ## CI
 
 - `build.yml`: multi-arch build, push to GHCR and Docker Hub, SBOM and provenance, Trivy image scan to code scanning.
   Runs on push to `main`, on `v*` tags, weekly (to pick up distro security updates) and on demand.
 - `security.yml`: hadolint, shellcheck and a Trivy repository scan (secrets, misconfiguration, vulnerabilities) daily.
-- `renovate.json`: Renovate raises and auto-merges pull requests for new Technitium and Technitium Console
+- `renovate.json`: Renovate raises and auto-merges pull requests for new Technitium, Technitium Console and acme.sh
   releases and for GitHub Action updates (pinned by commit SHA). A merge to `main` triggers `build.yml`.
 
 Required repository settings: variable `DOCKERHUB_USERNAME`, secret `DOCKERHUB_TOKEN`, the Renovate GitHub App

@@ -15,6 +15,7 @@ services:
         ipv4_address: ${NODE_IP}
     volumes:
       - dns-config:/etc/dns
+      - acme:/var/lib/acme.sh
       - kea:/var/lib/kea
       # - ./pgbouncer-userlist.txt:/etc/pgbouncer/userlist.txt:ro
 
@@ -30,4 +31,5 @@ networks:
 
 volumes:
   dns-config:
+  acme:
   kea:
