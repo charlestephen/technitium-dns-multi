@@ -303,4 +303,22 @@ disabled (both would answer on UDP 67).
 
 ## License
 
-See the licenses of the bundled components. This repository's own files are provided as-is.
+Copyright (C) 2026 Charles Stephen Thompson
+
+The files in this repository (Containerfile, scripts, templates and workflows) are licensed under the
+[GNU General Public License, version 3 or later](LICENSE), the same license as Technitium DNS Server, Technitium Console
+and acme.sh, which the image is built around.
+
+The image also contains separate programs under their own licenses. They are installed unmodified and run as separate
+processes; they are not combined into a single program with this repository's files.
+
+| Component | License |
+|---|---|
+| Technitium DNS Server | GPL-3.0 |
+| Technitium Console | GPL-3.0 |
+| acme.sh | GPL-3.0 |
+| dnsdist | GPL-2.0 |
+| keepalived | GPL-2.0 |
+| PgBouncer | ISC |
+| Kea | MPL-2.0 |
+| libmsquic | MIT |

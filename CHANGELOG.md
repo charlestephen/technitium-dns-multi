@@ -18,3 +18,4 @@
 - Added a Requirements section to the README.
 - Added automatic releases: a release job creates a GitHub release and a changelog entry from the versions of the bundled applications and their upstream release notes.
 - Removed Trivy scanning from the workflows.
+- Added a GPL-3.0-or-later license, matching Technitium DNS Server, Technitium Console and acme.sh.
