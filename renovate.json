@@ -1,6 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "timezone": "UTC",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "minimumReleaseAge": "3 days",
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Dependency Dashboard",
+  "dependencyDashboardLabels": ["dependencies"],
+  "labels": ["dependencies"],
+  "enabledManagers": ["custom.regex", "github-actions"],
   "customManagers": [
     {
       "customType": "regex",
@@ -12,9 +22,28 @@
   ],
   "packageRules": [
     {
-      "matchManagers": ["custom.regex", "github-actions"],
+      "description": "Bundled applications: one PR each. Merging one triggers a build and a release.",
+      "matchManagers": ["custom.regex"],
       "automerge": true,
       "platformAutomerge": true
+    },
+    {
+      "description": "The Containerfile pins the dnsdist 2.1 repository (DNSDIST_SERIES=21); stay on 2.1.x until that is changed.",
+      "matchDepNames": ["powerdns/dnsdist-21"],
+      "allowedVersions": "/^2\\.1\\./"
+    },
+    {
+      "description": "GitHub Actions: all updates in one PR.",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "description": "Major updates wait for approval from the Dependency Dashboard instead of opening a PR.",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "automerge": false
     }
   ]
 }

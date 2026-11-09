@@ -23,3 +23,4 @@
 - Containerfile passes hadolint: `pipefail` shell, `WORKDIR` for the acme.sh install, JSON-form health check; build also asserts the `postgres` user exists.
 - Health check treats SERVFAIL and REFUSED as unhealthy, so a dead Technitium behind a running dnsdist moves the virtual IP; loopback is always in the dnsdist ACL.
 - `CMD` is cleared, because the base image's `CMD ["/etc/dns"]` was passed to the new entrypoint.
+- Renovate: dependency dashboard configured with a weekly schedule, PR limits, a 3 day release age, grouped GitHub Actions updates, dnsdist held to 2.1.x, and major updates approved from the dashboard.
