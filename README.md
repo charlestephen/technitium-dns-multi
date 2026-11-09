@@ -301,41 +301,6 @@ disabled (both would answer on UDP 67).
 - The control agent API is unauthenticated. Restrict TCP `KEA_CTRL_PORT` to the peer node and set `KEA_CTRL_BIND`.
 - DHCP needs layer 2 access: use macvlan or host networking, not a bridged published-port setup.
 
-## Build
-
-```sh
-podman build -f Containerfile -t technitium-dns-multi .
-```
-
-Upstream versions are build arguments: `TECHNITIUM_VERSION`, `CONSOLE_VERSION`, `ACMESH_VERSION`, `DNSDIST_VERSION` and `DNSDIST_SERIES`.
-
-dnsdist is installed from PowerDNS's own apt repository (`repo.powerdns.com`), not from Ubuntu: the Ubuntu package is 1.8.x and
-has no DNS over QUIC. `DNSDIST_VERSION` is the release (matching the `powerdns/dnsdist-<series>` container tag) and
-`DNSDIST_SERIES` selects the repository (`21` for 2.1.x). The build fails if `libmsquic`, `dig` or QUIC support in dnsdist is missing.
-
-## CI
-
-- `build.yml`: multi-arch build, push to GHCR and Docker Hub, SBOM and provenance.
-  Runs on push to `main`, on `v*` tags, weekly (to pick up distro security updates) and on demand.
-- Releases: after each build on `main`, the `release` job reads the versions of the bundled applications (the pinned
-  versions in the `Containerfile` and the apt package versions inside the built image) and compares them with the
-  previous release. When any version changed it creates a GitHub release named `vYYYY.M.D` (`vYYYY.M.D.2` for a second
-  one on the same day), tags the already-built image with that name on GHCR and Docker Hub without rebuilding, and adds the
-  same notes to `CHANGELOG.md`. The notes contain a version table and, for each application whose version changed, its
-  upstream release notes (Technitium, Technitium Console, acme.sh, PgBouncer and libmsquic from their GitHub releases,
-  dnsdist from the PowerDNS changelog, Kea from the ISC release notes; keepalived has no machine-readable notes, so the
-  release links to them). Mentions in upstream text are neutralised and issue numbers are linked to the upstream repository.
-  Nothing is released when no tracked version changed. The code is in `scripts/release_notes.py`.
-- `security.yml`: hadolint and shellcheck, plus a self-test of the release notes script, daily.
-- `renovate.json`: Renovate raises and auto-merges pull requests for new Technitium, Technitium Console, dnsdist and acme.sh
-  releases and for GitHub Action updates (pinned by commit SHA). A merge to `main` triggers `build.yml`.
-
-Required repository settings: variable `DOCKERHUB_USERNAME`, secret `DOCKERHUB_TOKEN`, the Renovate GitHub App
-installed on the repository, and branch protection that requires the `build` and `security` checks if auto-merge
-should wait for them. The release job commits `CHANGELOG.md` straight to the default branch through the GitHub API (the
-commit is signed by GitHub), so that branch must allow pushes from `github-actions`. The workflow requests the
-`contents: write` and `packages: write` permissions it needs.
-
 ## License
 
 See the licenses of the bundled components. This repository's own files are provided as-is.
