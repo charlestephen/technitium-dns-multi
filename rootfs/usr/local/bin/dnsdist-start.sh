@@ -20,6 +20,31 @@ proxy=""
 DNSDIST_BACKEND_LUA=$(printf '%s' "$DNSDIST_BACKENDS" | tr -d ' ' | tr ',' '\n' \
     | awk -v proxy="$proxy" 'NF { printf "newServer({address=\"%s\", name=\"backend%d\"%s})\n", $1, NR, proxy }')
 
+# Built-in web dashboard and API. Without a password nothing is started, because dnsdist would otherwise
+# serve the dashboard unauthenticated to every address in the ACL.
+lua_str() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+# value of $1, or the contents of the file named by $1_FILE
+secret() {
+    v=$(printenv "$1" || true)
+    if [ -z "$v" ]; then
+        f=$(printenv "$1_FILE" || true)
+        if [ -n "$f" ]; then v=$(cat "$f"); fi
+    fi
+    printf '%s' "$v"
+}
+DNSDIST_WEB_LUA=""
+web_pw=$(secret DNSDIST_WEB_PASSWORD)
+if [ -n "$web_pw" ]; then
+    web_key=$(secret DNSDIST_WEB_API_KEY)
+    web_acl=$(printf '%s' "$DNSDIST_WEB_ACL" | tr -d ' ')
+    api=""
+    if [ -n "$web_key" ]; then api=", apiKey=\"$(lua_str "$web_key")\""; fi
+    DNSDIST_WEB_LUA="webserver(\"${DNSDIST_WEB_LISTEN}\")
+setWebserverConfig({password=\"$(lua_str "$web_pw")\"${api}, acl=\"${web_acl}\"})"
+else
+    echo "dnsdist-start: DNSDIST_WEB_PASSWORD is not set; the dashboard is disabled" >&2
+fi
+
 DNSDIST_TLS_LUA=""
 want_tls=false
 for v in "$DNSDIST_ENABLE_DOT" "$DNSDIST_ENABLE_DOH" "$DNSDIST_ENABLE_DOQ"; do
@@ -45,7 +70,9 @@ if [ "$want_tls" = "true" ]; then
     fi
 fi
 
-export DNSDIST_ACL_LUA DNSDIST_BACKEND_LUA DNSDIST_TLS_LUA
+# the rendered file can contain the dashboard password: readable by root only
+umask 077
+export DNSDIST_ACL_LUA DNSDIST_BACKEND_LUA DNSDIST_TLS_LUA DNSDIST_WEB_LUA
 envsubst < "$T/dnsdist.conf.tmpl" > "$OUT"
 
 exec dnsdist --supervised -C "$OUT"

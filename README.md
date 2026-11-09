@@ -193,6 +193,11 @@ These are passed straight to Technitium. Upstream reads them [only when the DNS 
 | `DNSDIST_DOH_LISTEN` | `0.0.0.0:443` | DoH address and TCP port. |
 | `DNSDIST_DOH_PATH` | `/dns-query` | URL path that accepts DoH queries. |
 | `DNSDIST_DOQ_LISTEN` | `0.0.0.0:853` | DoQ address and UDP port. |
+| `DNSDIST_WEB_PASSWORD` | empty | Password for the dnsdist dashboard and API (any user name). The dashboard is only started when this or `DNSDIST_WEB_PASSWORD_FILE` is set. |
+| `DNSDIST_WEB_PASSWORD_FILE` | empty | Path of a file holding the dashboard password. |
+| `DNSDIST_WEB_API_KEY` | empty | Optional API key for scripts, sent as the `X-API-Key` header. `DNSDIST_WEB_API_KEY_FILE` reads it from a file. |
+| `DNSDIST_WEB_LISTEN` | `0.0.0.0:8083` | Address and TCP port of the dashboard. |
+| `DNSDIST_WEB_ACL` | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` | Comma separated networks allowed to reach the dashboard. |
 | `DNSDIST_TLS_CERT` | `/etc/dns/certs/fullchain.pem` | Certificate chain in PEM format, used for DoT, DoH and DoQ. |
 | `DNSDIST_TLS_KEY` | `/etc/dns/certs/key.pem` | Private key in PEM format. |
 | `DNSDIST_ACL` | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` | Comma separated networks allowed to query. |
@@ -291,13 +296,29 @@ PGBOUNCER_DATABASES=dns = host=10.0.0.5 port=5432 dbname=technitium; dhcp = host
 Clients connect to `PGBOUNCER_LISTEN_PORT` (default 6432) and use the logical name (`dns` or `dhcp`) as the database
 name. The real database name, host and port can then change without touching the clients.
 
+## dnsdist dashboard
+
+dnsdist has a built-in web dashboard that shows how queries are being distributed: queries, responses and latency for
+each backend, plus overall query and cache statistics. Set `DNSDIST_WEB_PASSWORD` (or `DNSDIST_WEB_PASSWORD_FILE`) and
+open `http://<node address>:8083/`. Log in with any user name and that password.
+
+- The dashboard is off unless a password is set, because dnsdist serves it without authentication otherwise.
+- Access is limited to `DNSDIST_WEB_ACL`, which defaults to the private address ranges. Narrow it to the hosts that
+  need it.
+- The web server speaks plain HTTP, so the password is not encrypted on the wire. Keep it on a trusted network or put a
+  TLS-terminating reverse proxy in front.
+- `DNSDIST_WEB_API_KEY` enables the JSON API for scripts and monitoring (`GET /jsonstat`, `GET /metrics`,
+  `GET /api/v1/servers/localhost`) with the `X-API-Key` header. See the
+  [dnsdist web server documentation](https://dnsdist.org/guides/webserver.html).
+- Each node has its own dashboard and shows only its own traffic.
+
 ## Requirements
 
 - **Capabilities:** `NET_ADMIN` (keepalived adds the virtual IP), `NET_RAW` (VRRP and DHCP raw sockets) and
   `NET_BIND_SERVICE` (ports below 1024).
 - **Networking:** DHCP and VRRP need layer 2 access to the LAN: use macvlan or host networking.
 - **Ports:** 53 UDP/TCP (DNS), 853 TCP (DoT), 853 UDP (DoQ), 443 TCP (DoH), 5380/53443 TCP (Technitium web console),
-  67 UDP (DHCP), 6432 TCP (PgBouncer), 8000 TCP (Kea control agent, peer only).
+  67 UDP (DHCP), 6432 TCP (PgBouncer), 8000 TCP (Kea control agent, peer only), 8083 TCP (dnsdist dashboard).
 - **QUIC:** DoQ needs UDP 853 to be reachable. Technitium uses `libmsquic`, which the upstream Technitium image installs, for
   outbound DNS over QUIC (for example `DNS_SERVER_FORWARDER_PROTOCOL=Quic`). The build verifies that it is present.
 - **Technitium encrypted DNS:** leave Technitium's own DoT, DoH and DoQ listeners off. The container disables them, and

@@ -5,6 +5,9 @@ setACL({${DNSDIST_ACL_LUA}})
 -- Encrypted DNS (DoT, DoH, DoQ); empty when no certificate is available
 ${DNSDIST_TLS_LUA}
 
+-- Dashboard and API (empty unless DNSDIST_WEB_PASSWORD is set)
+${DNSDIST_WEB_LUA}
+
 -- Backends
 ${DNSDIST_BACKEND_LUA}
 

@@ -24,13 +24,14 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive
 
 # dnsdist comes from PowerDNS's own repository: the Ubuntu package is 1.8.x, which has no DNS over QUIC.
-# The signing key is pinned by checksum; a rotated key fails the build instead of being trusted blindly.
-ARG POWERDNS_KEY_SHA256=59f44df793f0541b0b2f58548be88c270794550066d4e34c5ab382f5f1a0e305
+# The 2.1 release repository is signed by key FD380FBB (the master branch uses a different key). The key is pinned
+# by checksum; a rotated key fails the build instead of being trusted blindly.
+ARG POWERDNS_KEY_SHA256=efeb5b1451c76de1dac8eefaddba5af5549e8fd93484728744ea7b4923decae8
 # Distribution packages follow the Ubuntu security updates, so they are deliberately not pinned (dnsdist is).
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && install -d /etc/apt/keyrings \
-    && curl -fsSL https://repo.powerdns.com/CBC8B383-pub.asc -o /etc/apt/keyrings/dnsdist-pub.asc \
+    && curl -fsSL https://repo.powerdns.com/FD380FBB-pub.asc -o /etc/apt/keyrings/dnsdist-pub.asc \
     && echo "${POWERDNS_KEY_SHA256}  /etc/apt/keyrings/dnsdist-pub.asc" | sha256sum -c - \
     && . /etc/os-release \
     && echo "deb [signed-by=/etc/apt/keyrings/dnsdist-pub.asc] https://repo.powerdns.com/ubuntu ${VERSION_CODENAME}-dnsdist-${DNSDIST_SERIES} main" > /etc/apt/sources.list.d/pdns.list \
@@ -80,6 +81,10 @@ ENV ENABLE_TECHNITIUM=true \
     DNSDIST_LISTEN=0.0.0.0:53 \
     DNSDIST_BACKENDS=127.0.0.1:538 \
     DNSDIST_BACKEND_PROXY_PROTOCOL=true \
+    DNSDIST_WEB_LISTEN=0.0.0.0:8083 \
+    DNSDIST_WEB_ACL=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 \
+    DNSDIST_WEB_PASSWORD= \
+    DNSDIST_WEB_API_KEY= \
     DNSDIST_TLS_CERT=/etc/dns/certs/fullchain.pem \
     DNSDIST_TLS_KEY=/etc/dns/certs/key.pem \
     DNSDIST_ENABLE_DOT=true \
@@ -126,8 +131,8 @@ ENV ENABLE_TECHNITIUM=true \
     ACME_SERVER=letsencrypt \
     ACME_PFX_PASSWORD=
 
-# DNS, DHCP, DoT/DoQ, DoH, web console (HTTP/HTTPS), PgBouncer, Kea control agent
-EXPOSE 53/udp 53/tcp 67/udp 443/tcp 443/udp 853/tcp 853/udp 5380/tcp 53443/tcp 6432/tcp 8000/tcp
+# DNS, DHCP, DoT/DoQ, DoH, web console (HTTP/HTTPS), PgBouncer, Kea control agent, dnsdist dashboard
+EXPOSE 53/udp 53/tcp 67/udp 443/tcp 443/udp 853/tcp 853/udp 5380/tcp 53443/tcp 6432/tcp 8000/tcp 8083/tcp
 
 VOLUME ["/etc/dns", "/var/lib/acme.sh", "/var/lib/kea"]
 

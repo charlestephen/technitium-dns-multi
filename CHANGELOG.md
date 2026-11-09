@@ -24,3 +24,5 @@
 - Health check treats SERVFAIL and REFUSED as unhealthy, so a dead Technitium behind a running dnsdist moves the virtual IP; loopback is always in the dnsdist ACL.
 - `CMD` is cleared, because the base image's `CMD ["/etc/dns"]` was passed to the new entrypoint.
 - Renovate: dependency dashboard configured with a weekly schedule, PR limits, a 3 day release age, grouped GitHub Actions updates, dnsdist held to 2.1.x, and major updates approved from the dashboard.
+- Fixed the image build: the dnsdist 2.1 repository is signed by key FD380FBB, not the master-branch key that was pinned.
+- Added the dnsdist dashboard and API (port 8083), protected by `DNSDIST_WEB_PASSWORD` and limited by `DNSDIST_WEB_ACL`; it is not started without a password.
