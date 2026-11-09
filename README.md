@@ -315,7 +315,7 @@ has no DNS over QUIC. `DNSDIST_VERSION` is the release (matching the `powerdns/d
 
 ## CI
 
-- `build.yml`: multi-arch build, push to GHCR and Docker Hub, SBOM and provenance, Trivy image scan to code scanning.
+- `build.yml`: multi-arch build, push to GHCR and Docker Hub, SBOM and provenance.
   Runs on push to `main`, on `v*` tags, weekly (to pick up distro security updates) and on demand.
 - Releases: after each build on `main`, the `release` job reads the versions of the bundled applications (the pinned
   versions in the `Containerfile` and the apt package versions inside the built image) and compares them with the
@@ -326,7 +326,7 @@ has no DNS over QUIC. `DNSDIST_VERSION` is the release (matching the `powerdns/d
   dnsdist from the PowerDNS changelog, Kea from the ISC release notes; keepalived has no machine-readable notes, so the
   release links to them). Mentions in upstream text are neutralised and issue numbers are linked to the upstream repository.
   Nothing is released when no tracked version changed. The code is in `scripts/release_notes.py`.
-- `security.yml`: hadolint, shellcheck and a Trivy repository scan (secrets, misconfiguration, vulnerabilities) daily.
+- `security.yml`: hadolint and shellcheck, plus a self-test of the release notes script, daily.
 - `renovate.json`: Renovate raises and auto-merges pull requests for new Technitium, Technitium Console, dnsdist and acme.sh
   releases and for GitHub Action updates (pinned by commit SHA). A merge to `main` triggers `build.yml`.
 

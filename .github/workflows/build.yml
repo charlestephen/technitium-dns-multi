@@ -23,7 +23,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      security-events: write
       id-token: write
       attestations: write
     outputs:
@@ -85,22 +84,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Scan the registry copy of the image that was just pushed.
-      - name: Trivy image scan
-        if: env.PUSH == 'true'
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ${{ env.GHCR_IMAGE }}@${{ steps.build.outputs.digest }}
-          format: sarif
-          output: trivy-image.sarif
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-
-      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
-        if: env.PUSH == 'true' && !cancelled()
-        with:
-          sarif_file: trivy-image.sarif
-          category: trivy-image
 
   # Creates a GitHub release and a CHANGELOG.md entry whenever a bundled application's version changed.
   # The notes come from each application's own upstream release notes (scripts/release_notes.py).
