@@ -5,7 +5,7 @@ A single container that bundles a highly available DNS stack around
 
 | Component | Role |
 |---|---|
-| [Technitium DNS Server](https://technitium.com/dns/) | Authoritative and recursive DNS, DHCP, web console |
+| [Technitium DNS Server](https://technitium.com/dns/) | Authoritative and recursive DNS, web console; its built-in DHCP server is not used when Kea is enabled |
 | [Technitium Console](https://github.com/byGarcia/technitium-console) | Alternative web UI (served from Technitium's web folder) |
 | [dnsdist](https://dnsdist.org/) | Front end for plain DNS, DNS over TLS, DNS over HTTPS and DNS over QUIC; caches, applies ACL/rate limits, load balances across backends |
 | [keepalived](https://www.keepalived.org/) | VRRP virtual IP that fails over when the local DNS path stops answering |
@@ -38,6 +38,24 @@ off Technitium's own DoT, DoH and DoQ listeners, which would otherwise collide w
 Until this has happened on first boot, dnsdist cannot bind port 53 and is restarted by supervisord.
 
 Run multiple nodes with the same `KEEPALIVED_VIP` and `KEEPALIVED_VRID` and different `KEEPALIVED_PRIORITY`.
+
+The optional components sit beside the DNS path:
+
+```
+DHCP          client ─► Kea DHCPv4 (UDP 67) ◄── lease sync, TCP 8000 ──► Kea on the other node
+Database      application ─► PgBouncer (TCP 6432) ─► PostgreSQL
+Certificates  acme.sh ─► /etc/dns/certs ─┬─► dnsdist (PEM: DoT, DoH, DoQ)
+                                         └─► Technitium web console (PKCS#12)
+```
+
+- **Kea** (`ENABLE_KEA`) answers DHCP on the node's own address, not on the virtual IP. Two nodes run Kea in HA
+  load-balancing mode and share leases through the Kea control agent, so DHCP fails over by itself and does not depend on
+  keepalived. Kea hands out the virtual IP as the DNS server (`KEA_DNS_SERVERS`). It replaces Technitium's own DHCP
+  server, which has no failover. See [Kea DHCP](#kea-dhcp-ha-load-balancing).
+- **PgBouncer** (`ENABLE_PGBOUNCER`) pools connections to PostgreSQL servers you name in `PGBOUNCER_DATABASES`.
+  See [PgBouncer](#pgbouncer).
+- **acme.sh** (`ENABLE_ACME`) obtains and renews the certificate used by dnsdist and the Technitium web console, and
+  restarts dnsdist after each renewal. See [Certificates](#certificates).
 
 ## Quick start
 
