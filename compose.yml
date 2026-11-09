@@ -1,6 +1,6 @@
 services:
   dns:
-    image: ${IMAGE:-docker.io/charlestephen/technitium-dns-multi:latest}
+    image: ${IMAGE:-ghcr.io/charlestephen/technitium-dns-multi:latest}
     build:
       context: .
       dockerfile: Containerfile

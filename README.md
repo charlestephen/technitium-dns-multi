@@ -15,7 +15,7 @@ A single container that bundles a highly available DNS stack around
 Each component is switched on or off with an `ENABLE_*` variable. All configuration comes from environment
 variables; config files are rendered from templates at start.
 
-Images: [`docker.io/charlestephen/technitium-dns-multi`](https://hub.docker.com/r/charlestephen/technitium-dns-multi) and `ghcr.io/charlestephen/technitium-dns-multi` (`linux/amd64`, `linux/arm64`).
+Images: [`ghcr.io/charlestephen/technitium-dns-multi`](https://github.com/charlestephen/technitium-dns-multi/pkgs/container/technitium-dns-multi) and [`docker.io/charlestephen/technitium-dns-multi`](https://hub.docker.com/r/charlestephen/technitium-dns-multi) (`linux/amd64`, `linux/arm64`).
 
 ## How it fits together
 
@@ -49,7 +49,7 @@ sudo podman run -d --name technitium-dns-multi --hostname technitium-dns-multi \
   --env-file .env \
   -v dns-config:/etc/dns \
   -v kea:/var/lib/kea \
-  docker.io/charlestephen/technitium-dns-multi:latest
+  ghcr.io/charlestephen/technitium-dns-multi:latest
 ```
 
 `docker run` accepts the same flags (`docker network create -d macvlan …`). Without macvlan, use `--network host`
