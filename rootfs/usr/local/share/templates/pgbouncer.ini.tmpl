@@ -1,0 +1,11 @@
+[databases]
+${PGBOUNCER_DATABASES}
+
+[pgbouncer]
+listen_addr = ${PGBOUNCER_LISTEN_ADDR}
+listen_port = ${PGBOUNCER_LISTEN_PORT}
+auth_type = ${PGBOUNCER_AUTH_TYPE}
+auth_file = ${PGBOUNCER_AUTH_FILE}
+pool_mode = ${PGBOUNCER_POOL_MODE}
+max_client_conn = ${PGBOUNCER_MAX_CLIENT_CONN}
+default_pool_size = ${PGBOUNCER_DEFAULT_POOL_SIZE}

@@ -1,0 +1,11 @@
+setLocal("${DNSDIST_LISTEN}")
+setACL({${DNSDIST_ACL_LUA}})
+${DNSDIST_BACKEND_LUA}
+
+pc = newPacketCache(${DNSDIST_CACHE_ENTRIES}, {maxTTL=86400, minTTL=0, temporaryFailureTTL=60, staleTTL=60})
+getPool(""):setCache(pc)
+
+-- 0 disables per-client rate limiting
+if ${DNSDIST_MAX_QPS_PER_IP} > 0 then
+  addAction(MaxQPSIPRule(${DNSDIST_MAX_QPS_PER_IP}), DropAction())
+end

@@ -1,0 +1,39 @@
+{
+  "Dhcp4": {
+    "interfaces-config": { "interfaces": [ "${KEA_INTERFACE}" ] },
+    "control-socket": { "socket-type": "unix", "socket-name": "/run/kea/kea4-ctrl-socket" },
+    "lease-database": { "type": "memfile", "persist": true, "name": "/var/lib/kea/kea-leases4.csv", "lfc-interval": 3600 },
+    "valid-lifetime": ${KEA_LEASE_SECONDS},
+    "hooks-libraries": [
+      { "library": "libdhcp_lease_cmds.so" },
+      {
+        "library": "libdhcp_ha.so",
+        "parameters": {
+          "high-availability": [ {
+            "this-server-name": "${KEA_HA_THIS_NAME}",
+            "mode": "load-balancing",
+            "heartbeat-delay": 10000,
+            "max-response-delay": 60000,
+            "max-ack-delay": 5000,
+            "max-unacked-clients": 5,
+            "peers": [
+              { "name": "dhcp-primary",   "url": "http://${KEA_HA_PRIMARY_ADDR}:${KEA_CTRL_PORT}/",   "role": "primary" },
+              { "name": "dhcp-secondary", "url": "http://${KEA_HA_SECONDARY_ADDR}:${KEA_CTRL_PORT}/", "role": "secondary" }
+            ]
+          } ]
+        }
+      }
+    ],
+    "subnet4": [ {
+      "id": 1,
+      "subnet": "${KEA_SUBNET}",
+      "pools": [ { "pool": "${KEA_POOL}" } ],
+      "option-data": [
+        { "name": "routers", "data": "${KEA_ROUTERS}" },
+        { "name": "domain-name-servers", "data": "${KEA_DNS_SERVERS}" },
+        { "name": "domain-name", "data": "${KEA_DOMAIN}" }
+      ]
+    } ],
+    "loggers": [ { "name": "kea-dhcp4", "output_options": [ { "output": "stdout" } ], "severity": "INFO" } ]
+  }
+}

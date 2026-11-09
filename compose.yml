@@ -1,0 +1,33 @@
+services:
+  dns:
+    image: ${IMAGE:-ghcr.io/charlestephen/technitium-dns-ha:latest}
+    build:
+      context: .
+      dockerfile: Containerfile
+    container_name: ${CONTAINER_NAME:-technitium-ha}
+    hostname: ${CONTAINER_HOSTNAME:-technitium-ha}
+    restart: unless-stopped
+    # NET_ADMIN: keepalived adds the VIP. NET_RAW: VRRP and DHCP raw sockets.
+    cap_add: [NET_ADMIN, NET_RAW, NET_BIND_SERVICE]
+    env_file: .env
+    networks:
+      lan:
+        ipv4_address: ${NODE_IP}
+    volumes:
+      - dns-config:/etc/dns
+      - kea:/var/lib/kea
+      # - ./pgbouncer-userlist.txt:/etc/pgbouncer/userlist.txt:ro
+
+networks:
+  lan:
+    driver: macvlan
+    driver_opts:
+      parent: ${LAN_PARENT_INTERFACE:-eth0}
+    ipam:
+      config:
+        - subnet: ${LAN_SUBNET}
+          gateway: ${LAN_GATEWAY}
+
+volumes:
+  dns-config:
+  kea:

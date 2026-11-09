@@ -1,0 +1,26 @@
+global_defs {
+    script_user root
+    enable_script_security
+}
+
+vrrp_script chk_dns {
+    script "/usr/local/bin/healthcheck.sh"
+    interval 2
+    fall 3
+    rise 2
+}
+
+vrrp_instance DNS {
+    state ${KEEPALIVED_STATE}
+    interface ${KEEPALIVED_INTERFACE}
+    virtual_router_id ${KEEPALIVED_VRID}
+    priority ${KEEPALIVED_PRIORITY}
+    advert_int 1
+    ${KEEPALIVED_UNICAST_BLOCK}
+    virtual_ipaddress {
+        ${KEEPALIVED_VIP}
+    }
+    track_script {
+        chk_dns
+    }
+}
