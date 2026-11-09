@@ -19,3 +19,7 @@
 - Added automatic releases: a release job creates a GitHub release and a changelog entry from the versions of the bundled applications and their upstream release notes.
 - Removed Trivy scanning from the workflows.
 - Added a GPL-3.0-or-later license, matching Technitium DNS Server, Technitium Console and acme.sh.
+- Docker Hub push is skipped, not failed, when the `DOCKERHUB_TOKEN` secret is missing; the Docker Hub user name is fixed in the workflow.
+- Containerfile passes hadolint: `pipefail` shell, `WORKDIR` for the acme.sh install, JSON-form health check; build also asserts the `postgres` user exists.
+- Health check treats SERVFAIL and REFUSED as unhealthy, so a dead Technitium behind a running dnsdist moves the virtual IP; loopback is always in the dnsdist ACL.
+- `CMD` is cleared, because the base image's `CMD ["/etc/dns"]` was passed to the new entrypoint.

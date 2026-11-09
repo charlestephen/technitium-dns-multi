@@ -30,6 +30,9 @@ jobs:
     env:
       GHCR_IMAGE: ghcr.io/charlestephen/technitium-dns-multi
       HUB_IMAGE: docker.io/charlestephen/technitium-dns-multi
+      HUB_USER: charlestephen
+      # Docker Hub is only used when the DOCKERHUB_TOKEN secret exists; GHCR is always used.
+      HUB_ENABLED: ${{ secrets.DOCKERHUB_TOKEN != '' }}
       PUSH: ${{ github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,18 +53,22 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        if: env.PUSH == 'true'
+        if: env.PUSH == 'true' && env.HUB_ENABLED == 'true'
         with:
           registry: docker.io
-          username: ${{ vars.DOCKERHUB_USERNAME }}
+          username: ${{ env.HUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Note when Docker Hub is skipped
+        if: env.PUSH == 'true' && env.HUB_ENABLED != 'true'
+        run: echo "::notice::DOCKERHUB_TOKEN is not set; pushing to GHCR only."
 
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
             ${{ env.GHCR_IMAGE }}
-            ${{ env.HUB_IMAGE }}
+            ${{ env.HUB_ENABLED == 'true' && env.HUB_IMAGE || '' }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=technitium-${{ steps.up.outputs.technitium }},enable={{is_default_branch}}
@@ -100,6 +107,8 @@ jobs:
     env:
       GHCR_IMAGE: ghcr.io/charlestephen/technitium-dns-multi
       HUB_IMAGE: docker.io/charlestephen/technitium-dns-multi
+      HUB_USER: charlestephen
+      HUB_ENABLED: ${{ secrets.DOCKERHUB_TOKEN != '' }}
       DIGEST: ${{ needs.image.outputs.digest }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -116,9 +125,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: env.HUB_ENABLED == 'true'
         with:
           registry: docker.io
-          username: ${{ vars.DOCKERHUB_USERNAME }}
+          username: ${{ env.HUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Read package versions from the built image
@@ -135,17 +145,20 @@ jobs:
       - name: Generate release notes
         id: notes
         run: |
+          images=("$GHCR_IMAGE")
+          if [ "$HUB_ENABLED" = "true" ]; then images+=("$HUB_IMAGE"); fi
           python3 -I scripts/release_notes.py \
             --packages packages.txt --previous-body previous.md --existing-tags tags.txt \
-            --images "$GHCR_IMAGE" "$HUB_IMAGE" \
+            --images "${images[@]}" \
             --changelog CHANGELOG.md --out-release release.md
 
       - name: Tag the image with the release version
         if: steps.notes.outputs.changed == 'true'
         run: |
-          docker buildx imagetools create \
-            -t "$GHCR_IMAGE:${{ steps.notes.outputs.tag }}" -t "$HUB_IMAGE:${{ steps.notes.outputs.tag }}" \
-            "$GHCR_IMAGE@$DIGEST"
+          tag="${{ steps.notes.outputs.tag }}"
+          args=(-t "$GHCR_IMAGE:$tag")
+          if [ "$HUB_ENABLED" = "true" ]; then args+=(-t "$HUB_IMAGE:$tag"); fi
+          docker buildx imagetools create "${args[@]}" "$GHCR_IMAGE@$DIGEST"
 
       - name: Create the release
         if: steps.notes.outputs.changed == 'true'

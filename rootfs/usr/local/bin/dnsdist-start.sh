@@ -12,7 +12,8 @@ mkdir -p /run/conf
 # "a,b, c" -> "a","b","c"
 quote_list() { printf '%s' "$1" | tr -d ' ' | sed 's/,/","/g; s/^/"/; s/$/"/'; }
 
-DNSDIST_ACL_LUA=$(quote_list "$DNSDIST_ACL")
+# loopback is always allowed: the health check queries dnsdist from 127.0.0.1
+DNSDIST_ACL_LUA=$(quote_list "$DNSDIST_ACL,127.0.0.0/8")
 
 proxy=""
 [ "$DNSDIST_BACKEND_PROXY_PROTOCOL" = "true" ] && proxy=", useProxyProtocol=true"

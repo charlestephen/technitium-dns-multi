@@ -230,7 +230,7 @@ These are passed straight to Technitium. Upstream reads them [only when the DNS 
 | Variable | Default | Description |
 |---|---|---|
 | `ACME_DOMAINS` | empty | Comma separated domain names. The first is the certificate name. Required when `ENABLE_ACME=true`. |
-| `ACME_DNS_PROVIDER` | empty | acme.sh [`dnsapi`](https://github.com/acmesh-official/acme.sh/wiki/dnsapi) name, for example `dns_cf`. Required when `ENABLE_ACME=true`. The provider's own credential variables (for example `CF_Token`) are read by acme.sh from the environment. |
+| `ACME_DNS_PROVIDER` | empty | Required. acme.sh [`dnsapi`](https://github.com/acmesh-official/acme.sh/wiki/dnsapi) name, for example `dns_cf`. Required when `ENABLE_ACME=true`. The provider's own credential variables (for example `CF_Token`) are read by acme.sh from the environment. |
 | `ACME_EMAIL` | empty | Account email address. |
 | `ACME_SERVER` | `letsencrypt` | ACME CA name or directory URL. |
 | `ACME_PFX_PASSWORD` | empty | Password for the generated PKCS#12 file. |
@@ -270,7 +270,8 @@ so restart the container (or `supervisorctl restart dnsdist` inside it) after re
 dnsdist logs a message and serves plain DNS only.
 
 **acme.sh:** set `ENABLE_ACME=true`, `ACME_DOMAINS`, `ACME_DNS_PROVIDER` and that provider's credential variables
-(for example `CF_Token`). Issuance uses the DNS-01 challenge. After each issue or renewal the container writes
+(for example `CF_Token`). acme.sh must use a DNS provider (the DNS-01 challenge): the container does not expose a web
+server on port 80 or 443 for the HTTP-01 or TLS-ALPN-01 challenges, so those methods cannot be used. After each issue or renewal the container writes
 `/etc/dns/certs/fullchain.pem`, `key.pem` and `technitium.pfx` (protected by `ACME_PFX_PASSWORD`) and restarts dnsdist, which
 briefly interrupts DNS on that node. Renewal is checked every 12 hours. Keep `/var/lib/acme.sh` on a volume so the account
 and certificates survive restarts.

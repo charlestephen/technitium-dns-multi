@@ -18,11 +18,16 @@ ARG ACMESH_VERSION
 ARG DNSDIST_VERSION
 ARG DNSDIST_SERIES
 
+# pipefail so a failing command on the left of a pipe fails the build
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 # dnsdist comes from PowerDNS's own repository: the Ubuntu package is 1.8.x, which has no DNS over QUIC.
 # The signing key is pinned by checksum; a rotated key fails the build instead of being trusted blindly.
 ARG POWERDNS_KEY_SHA256=59f44df793f0541b0b2f58548be88c270794550066d4e34c5ab382f5f1a0e305
+# Distribution packages follow the Ubuntu security updates, so they are deliberately not pinned (dnsdist is).
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && install -d /etc/apt/keyrings \
     && curl -fsSL https://repo.powerdns.com/CBC8B383-pub.asc -o /etc/apt/keyrings/dnsdist-pub.asc \
@@ -37,16 +42,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/*
 
 # Fail the build if a runtime requirement is missing: libmsquic (Technitium DoQ), dig (health check),
-# and a dnsdist built with QUIC support (DoQ).
+# the postgres user (PgBouncer) and a dnsdist built with QUIC support (DoQ).
 RUN dpkg-query -W libmsquic \
     && command -v dig >/dev/null \
-    && dnsdist --version 2>&1 | tee /dev/stderr | grep -qi quic
+    && id postgres >/dev/null \
+    && dnsdist --version 2>&1 | tee /dev/stderr | grep -i quic >/dev/null
 
 # acme.sh, pinned. Config and certificates live in /var/lib/acme.sh (volume).
-RUN curl -fsSL "https://github.com/acmesh-official/acme.sh/archive/refs/tags/${ACMESH_VERSION}.tar.gz" | tar -xz -C /tmp \
-    && cd "/tmp/acme.sh-${ACMESH_VERSION}" \
+WORKDIR /tmp/acme-src
+RUN curl -fsSL "https://github.com/acmesh-official/acme.sh/archive/refs/tags/${ACMESH_VERSION}.tar.gz" | tar -xz --strip-components=1 \
     && ./acme.sh --install --home /opt/acme.sh --config-home /var/lib/acme.sh --nocron --noprofile \
-    && rm -rf /tmp/acme.sh-*
+    && rm -rf /tmp/acme-src/*
+WORKDIR /opt/technitium/dns
 
 # Alternative web console (flat tarball, served from DNS_SERVER_WEB_SERVICE_WWW_FOLDER_PATH).
 COPY --from=console /usr/share/technitium-console/technitium-console.tar.gz /tmp/console.tgz
@@ -58,6 +65,8 @@ COPY rootfs/ /
 RUN chmod +x /usr/local/bin/*.sh
 
 # Service switches and defaults. Every value can be overridden with -e.
+# ACME_PFX_PASSWORD is empty by default; it is a setting, not a secret baked into the image.
+# hadolint ignore=DL3064
 ENV ENABLE_TECHNITIUM=true \
     ENABLE_DNSDIST=true \
     ENABLE_KEEPALIVED=true \
@@ -123,6 +132,8 @@ EXPOSE 53/udp 53/tcp 67/udp 443/tcp 443/udp 853/tcp 853/udp 5380/tcp 53443/tcp 6
 VOLUME ["/etc/dns", "/var/lib/acme.sh", "/var/lib/kea"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD /usr/local/bin/healthcheck.sh
+    CMD ["/usr/local/bin/healthcheck.sh"]
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+# the base image sets CMD ["/etc/dns"]; the entrypoint starts Technitium itself
+CMD []
