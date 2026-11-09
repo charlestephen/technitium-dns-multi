@@ -16,3 +16,4 @@
 - dnsdist talks to Technitium with the PROXY protocol so Technitium sees real client addresses; Technitium's own DoT/DoH/DoQ listeners are disabled.
 - acme.sh restarts dnsdist after each issue or renewal; build asserts libmsquic, dig and dnsdist QUIC support.
 - Added a Requirements section to the README.
+- Added automatic releases: a release job creates a GitHub release and a changelog entry from the versions of the bundled applications and their upstream release notes.

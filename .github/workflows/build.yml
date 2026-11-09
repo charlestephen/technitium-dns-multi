@@ -26,6 +26,8 @@ jobs:
       security-events: write
       id-token: write
       attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     env:
       GHCR_IMAGE: ghcr.io/charlestephen/technitium-dns-multi
       HUB_IMAGE: docker.io/charlestephen/technitium-dns-multi
@@ -64,8 +66,7 @@ jobs:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=technitium-${{ steps.up.outputs.technitium }},enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=tag
             type=sha,prefix=sha-
             type=ref,event=pr
 
@@ -100,3 +101,82 @@ jobs:
         with:
           sarif_file: trivy-image.sarif
           category: trivy-image
+
+  # Creates a GitHub release and a CHANGELOG.md entry whenever a bundled application's version changed.
+  # The notes come from each application's own upstream release notes (scripts/release_notes.py).
+  release:
+    needs: image
+    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+    env:
+      GHCR_IMAGE: ghcr.io/charlestephen/technitium-dns-multi
+      HUB_IMAGE: docker.io/charlestephen/technitium-dns-multi
+      DIGEST: ${{ needs.image.outputs.digest }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: docker.io
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Read package versions from the built image
+        run: |
+          docker run --rm --entrypoint dpkg-query "$GHCR_IMAGE@$DIGEST" \
+            -W -f '${Package}=${Version}\n' keepalived pgbouncer kea-dhcp4-server libmsquic > packages.txt
+          cat packages.txt
+
+      - name: Look up the previous release
+        run: |
+          gh release view --json body --jq .body > previous.md 2>/dev/null || : > previous.md
+          git ls-remote --tags --refs origin | sed 's#.*refs/tags/##' > tags.txt
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          python3 -I scripts/release_notes.py \
+            --packages packages.txt --previous-body previous.md --existing-tags tags.txt \
+            --images "$GHCR_IMAGE" "$HUB_IMAGE" \
+            --changelog CHANGELOG.md --out-release release.md
+
+      - name: Tag the image with the release version
+        if: steps.notes.outputs.changed == 'true'
+        run: |
+          docker buildx imagetools create \
+            -t "$GHCR_IMAGE:${{ steps.notes.outputs.tag }}" -t "$HUB_IMAGE:${{ steps.notes.outputs.tag }}" \
+            "$GHCR_IMAGE@$DIGEST"
+
+      - name: Create the release
+        if: steps.notes.outputs.changed == 'true'
+        run: |
+          gh release create "${{ steps.notes.outputs.tag }}" --target "$GITHUB_SHA" \
+            --title "${{ steps.notes.outputs.tag }}" --notes-file release.md --latest
+
+      # Committed through the contents API so GitHub signs the commit. The blob sha of the
+      # checked-out file is sent, so the update is rejected if CHANGELOG.md changed meanwhile.
+      - name: Update CHANGELOG.md
+        if: steps.notes.outputs.changed == 'true'
+        run: |
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/CHANGELOG.md" \
+            -f message="Update changelog for ${{ steps.notes.outputs.tag }}" \
+            -f branch="$BRANCH" \
+            -f sha="$(git rev-parse HEAD:CHANGELOG.md)" \
+            -f content="$(base64 < CHANGELOG.md | tr -d '\n')"
