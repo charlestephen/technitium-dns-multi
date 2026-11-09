@@ -33,7 +33,9 @@ if [ "$KEA_HA_ROLE" = "primary" ]; then
 else
     KEA_HA_THIS_NAME=dhcp-secondary
 fi
-export KEA_HA_THIS_NAME
+# Kea needs the full path of its hook libraries; the directory is per architecture (x86_64-linux-gnu, aarch64-linux-gnu)
+KEA_HOOKS_DIR=$(dirname "$(find /usr/lib -path '*/kea/hooks/libdhcp_ha.so' -print -quit)")
+export KEA_HA_THIS_NAME KEA_HOOKS_DIR
 envsubst < "$T/kea-dhcp4.conf.tmpl" > "$OUT/kea-dhcp4.conf"
 envsubst < "$T/kea-ctrl-agent.conf.tmpl" > "$OUT/kea-ctrl-agent.conf"
 

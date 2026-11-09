@@ -4,10 +4,11 @@
     "control-socket": { "socket-type": "unix", "socket-name": "/run/kea/kea4-ctrl-socket" },
     "lease-database": { "type": "memfile", "persist": true, "name": "/var/lib/kea/kea-leases4.csv", "lfc-interval": 3600 },
     "valid-lifetime": ${KEA_LEASE_SECONDS},
+    "multi-threading": { "enable-multi-threading": false },
     "hooks-libraries": [
-      { "library": "libdhcp_lease_cmds.so" },
+      { "library": "${KEA_HOOKS_DIR}/libdhcp_lease_cmds.so" },
       {
-        "library": "libdhcp_ha.so",
+        "library": "${KEA_HOOKS_DIR}/libdhcp_ha.so",
         "parameters": {
           "high-availability": [ {
             "this-server-name": "${KEA_HA_THIS_NAME}",
@@ -16,6 +17,7 @@
             "max-response-delay": 60000,
             "max-ack-delay": 5000,
             "max-unacked-clients": 5,
+            "multi-threading": { "enable-multi-threading": false },
             "peers": [
               { "name": "dhcp-primary",   "url": "http://${KEA_HA_PRIMARY_ADDR}:${KEA_CTRL_PORT}/",   "role": "primary" },
               { "name": "dhcp-secondary", "url": "http://${KEA_HA_SECONDARY_ADDR}:${KEA_CTRL_PORT}/", "role": "secondary" }

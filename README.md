@@ -215,7 +215,7 @@ These are passed straight to Technitium. Upstream reads them [only when the DNS 
 | `KEEPALIVED_PRIORITY` | `100` | VRRP priority; the highest healthy node holds the virtual IP. |
 | `KEEPALIVED_UNICAST_SRC` | empty | This node's address for unicast VRRP. Empty uses multicast. |
 | `KEEPALIVED_UNICAST_PEERS` | empty | Comma separated peer addresses for unicast VRRP. |
-| `HEALTH_QUERY_NAME` | `localhost` | Name queried every 2 seconds to check that DNS answers. Also used by the container health check. |
+| `HEALTH_QUERY_NAME` | `localhost` | Name used by the keepalived and container health checks, and by dnsdist to check its backends. It must be a name the backend answers without recursing to the internet. |
 
 ### PgBouncer
 

@@ -47,6 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 RUN dpkg-query -W libmsquic \
     && command -v dig >/dev/null \
     && id postgres >/dev/null \
+    && ls /usr/lib/*/kea/hooks/libdhcp_ha.so /usr/lib/*/kea/hooks/libdhcp_lease_cmds.so >/dev/null \
     && dnsdist --version 2>&1 | tee /dev/stderr | grep -i quic >/dev/null
 
 # acme.sh, pinned. Config and certificates live in /var/lib/acme.sh (volume).

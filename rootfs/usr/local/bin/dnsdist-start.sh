@@ -17,8 +17,12 @@ DNSDIST_ACL_LUA=$(quote_list "$DNSDIST_ACL,127.0.0.0/8")
 
 proxy=""
 [ "$DNSDIST_BACKEND_PROXY_PROTOCOL" = "true" ] && proxy=", useProxyProtocol=true"
+# Backend health checks ask for a name the backend answers locally. dnsdist's default (a.root-servers.net)
+# makes a recursive resolver query the internet, which times out where external DNS is slow or blocked.
+check="${HEALTH_QUERY_NAME:-localhost}"
+case "$check" in *.) ;; *) check="$check." ;; esac
 DNSDIST_BACKEND_LUA=$(printf '%s' "$DNSDIST_BACKENDS" | tr -d ' ' | tr ',' '\n' \
-    | awk -v proxy="$proxy" 'NF { printf "newServer({address=\"%s\", name=\"backend%d\"%s})\n", $1, NR, proxy }')
+    | awk -v proxy="$proxy" -v check="$check" 'NF { printf "newServer({address=\"%s\", name=\"backend%d\", checkName=\"%s\"%s})\n", $1, NR, check, proxy }')
 
 # Built-in web dashboard and API. Without a password nothing is started, because dnsdist would otherwise
 # serve the dashboard unauthenticated to every address in the ACL.

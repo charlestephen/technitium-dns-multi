@@ -26,6 +26,7 @@
 - Renovate: dependency dashboard configured with a weekly schedule, PR limits, a 3 day release age, grouped GitHub Actions updates, dnsdist held to 2.1.x, and major updates approved from the dashboard.
 - Fixed the image build: the dnsdist 2.1 repository is signed by key FD380FBB, not the master-branch key that was pinned.
 - Added the dnsdist dashboard and API (port 8083), protected by `DNSDIST_WEB_PASSWORD` and limited by `DNSDIST_WEB_ACL`; it is not started without a password.
+<<<<<<< Updated upstream
 
 ## v2026.11.9 (2026-11-09)
 
@@ -287,3 +288,8 @@ We look forward to receiving your feedback.
 
 **Full Changelog**: https://github.com/microsoft/msquic/compare/v2.6.2...v2.6.3
 
+=======
+- Found by running the image: dnsdist's default backend health check (`a.root-servers.net`) makes Technitium recurse to the internet, so on a network with slow or blocked external DNS the backend was marked down and every query timed out. dnsdist now checks its backends with `HEALTH_QUERY_NAME`.
+- Found by running the image: Kea could not load its hook libraries by bare name; the template now uses the full path, resolved per architecture at start.
+- Found by running the image: Kea's HA module and the control agent both bound the same port; HA multi-threading is now off so HA uses the control agent.
+>>>>>>> Stashed changes
