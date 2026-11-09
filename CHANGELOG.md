@@ -8,3 +8,5 @@
 - Added Kea DHCPv4 with HA load balancing as an optional DHCP component.
 - Added multi-arch GHCR and Docker Hub build, Trivy scanning, hadolint, shellcheck and Renovate.
 - Replaced hardcoded addresses in `compose.yml` with variables.
+- Renamed the project and images to `technitium-dns-multi` (`charlestephen\/technitium-dns-multi` on Docker Hub and GHCR).
+- `PGBOUNCER_DATABASES` accepts several entries separated by `;`.

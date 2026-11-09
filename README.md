@@ -1,21 +1,21 @@
-# technitium-dns-ha
+# technitium-dns-multi
 
 A single container that bundles a highly available DNS stack around
-[Technitium DNS Server](https://technitium.com/dns/):
+[Technitium DNS Server](https://technitium.com/dns/) ([source](https://github.com/TechnitiumSoftware/DnsServer)):
 
 | Component | Role |
 |---|---|
-| Technitium DNS Server | Authoritative and recursive DNS, DHCP, web console |
+| [Technitium DNS Server](https://technitium.com/dns/) | Authoritative and recursive DNS, DHCP, web console |
 | [Technitium Console](https://github.com/byGarcia/technitium-console) | Alternative web UI (served from Technitium's web folder) |
-| dnsdist | Listens on port 53, caches, applies ACL/rate limits, load balances across backends |
-| keepalived | VRRP virtual IP that fails over when the local DNS path stops answering |
-| PgBouncer | Optional PostgreSQL connection pooler |
-| Kea DHCPv4 | Optional DHCP with HA load balancing between two nodes |
+| [dnsdist](https://dnsdist.org/) | Listens on port 53, caches, applies ACL/rate limits, load balances across backends |
+| [keepalived](https://www.keepalived.org/) | VRRP virtual IP that fails over when the local DNS path stops answering |
+| [PgBouncer](https://www.pgbouncer.org/) | Optional PostgreSQL connection pooler |
+| [Kea DHCPv4](https://www.isc.org/kea/) | Optional DHCP with HA load balancing between two nodes |
 
 Each component is switched on or off with an `ENABLE_*` variable. All configuration comes from environment
 variables; config files are rendered from templates at start.
 
-Images: `ghcr.io/<owner>/technitium-dns-ha` and `docker.io/<owner>/technitium-dns-ha` (`linux/amd64`, `linux/arm64`).
+Images: [`docker.io/charlestephen/technitium-dns-multi`](https://hub.docker.com/r/charlestephen/technitium-dns-multi) and `ghcr.io/charlestephen/technitium-dns-multi` (`linux/amd64`, `linux/arm64`).
 
 ## How it fits together
 
@@ -27,7 +27,7 @@ Technitium has no environment variable for its DNS listen address, so on start t
 Technitium API and sets `TECHNITIUM_DNS_LISTEN` (default `127.0.0.1:5353`). This needs `DNS_SERVER_ADMIN_PASSWORD`.
 Until that has happened on first boot, dnsdist cannot bind port 53 and is restarted by supervisord.
 
-Run two nodes with the same `KEEPALIVED_VIP` and `KEEPALIVED_VRID` and different `KEEPALIVED_PRIORITY`.
+Run multiple nodes with the same `KEEPALIVED_VIP` and `KEEPALIVED_VRID` and different `KEEPALIVED_PRIORITY`.
 
 ## Quick start
 
@@ -42,14 +42,14 @@ docker compose up -d      # or: podman compose up -d
 sudo podman network create -d macvlan \
   --subnet "$LAN_SUBNET" --gateway "$LAN_GATEWAY" -o parent="$LAN_PARENT_INTERFACE" lan
 
-sudo podman run -d --name technitium-ha --hostname technitium-ha \
+sudo podman run -d --name technitium-dns-multi --hostname technitium-dns-multi \
   --restart unless-stopped \
   --network lan --ip "$NODE_IP" \
   --cap-add NET_ADMIN --cap-add NET_RAW --cap-add NET_BIND_SERVICE \
   --env-file .env \
   -v dns-config:/etc/dns \
   -v kea:/var/lib/kea \
-  ghcr.io/<owner>/technitium-dns-ha:latest
+  docker.io/charlestephen/technitium-dns-multi:latest
 ```
 
 `docker run` accepts the same flags (`docker network create -d macvlan …`). Without macvlan, use `--network host`
@@ -72,8 +72,17 @@ the certificate path in the DNS settings.
 
 ## PgBouncer
 
-Set `ENABLE_PGBOUNCER=true`, `PGBOUNCER_DATABASES` (the body of the `[databases]` section) and mount a `userlist.txt`
-at `PGBOUNCER_AUTH_FILE`.
+Set `ENABLE_PGBOUNCER=true`, `PGBOUNCER_DATABASES` and mount a `userlist.txt` at `PGBOUNCER_AUTH_FILE`.
+
+`PGBOUNCER_DATABASES` lists the databases PgBouncer proxies, written as PgBouncer
+[`[databases]`](https://www.pgbouncer.org/config.html#section-databases) entries (`name = connection parameters`).
+Separate several entries with `;`:
+
+```sh
+PGBOUNCER_DATABASES=app = host=10.0.0.5 port=5432 dbname=app; reports = host=10.0.0.6 port=5432 dbname=reports
+```
+
+Clients connect to port `PGBOUNCER_LISTEN_PORT` (default 6432) using the name on the left.
 
 ## Kea DHCP (HA load balancing)
 
@@ -86,12 +95,11 @@ disabled (both would answer on UDP 67).
   stops responding. Leases are replicated between the nodes over the Kea control agent (`KEA_CTRL_PORT`).
 - The control agent API is unauthenticated. Restrict TCP `KEA_CTRL_PORT` to the peer node and set `KEA_CTRL_BIND`.
 - DHCP needs layer 2 access: use macvlan or host networking, not a bridged published-port setup.
-- Kea shipped in Ubuntu 24.04 is 2.4.x.
 
 ## Build
 
 ```sh
-podman build -f Containerfile -t technitium-dns-ha .
+podman build -f Containerfile -t technitium-dns-multi .
 ```
 
 Upstream versions are build arguments: `TECHNITIUM_VERSION`, `CONSOLE_VERSION`.

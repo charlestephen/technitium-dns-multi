@@ -1,11 +1,11 @@
 services:
   dns:
-    image: ${IMAGE:-ghcr.io/charlestephen/technitium-dns-ha:latest}
+    image: ${IMAGE:-docker.io/charlestephen/technitium-dns-multi:latest}
     build:
       context: .
       dockerfile: Containerfile
-    container_name: ${CONTAINER_NAME:-technitium-ha}
-    hostname: ${CONTAINER_HOSTNAME:-technitium-ha}
+    container_name: ${CONTAINER_NAME:-technitium-dns-multi}
+    hostname: ${CONTAINER_HOSTNAME:-technitium-dns-multi}
     restart: unless-stopped
     # NET_ADMIN: keepalived adds the VIP. NET_RAW: VRRP and DHCP raw sockets.
     cap_add: [NET_ADMIN, NET_RAW, NET_BIND_SERVICE]

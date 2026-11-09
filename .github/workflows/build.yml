@@ -27,8 +27,8 @@ jobs:
       id-token: write
       attestations: write
     env:
-      GHCR_IMAGE: ghcr.io/${{ github.repository }}
-      HUB_IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
+      GHCR_IMAGE: ghcr.io/charlestephen/technitium-dns-multi
+      HUB_IMAGE: docker.io/charlestephen/technitium-dns-multi
       PUSH: ${{ github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

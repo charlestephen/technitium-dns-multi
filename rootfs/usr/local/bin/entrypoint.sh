@@ -30,6 +30,9 @@ export KEEPALIVED_UNICAST_BLOCK
 envsubst < "$T/keepalived.conf.tmpl" > "$OUT/keepalived.conf"
 
 # --- pgbouncer -------------------------------------------------------------
+# entries are separated by ';' in the variable, one per line in the file
+PGBOUNCER_DATABASES=$(printf '%s' "$PGBOUNCER_DATABASES" | tr ';' '\n' | sed 's/^[[:space:]]*//')
+export PGBOUNCER_DATABASES
 envsubst < "$T/pgbouncer.ini.tmpl" > "$OUT/pgbouncer.ini"
 chmod 644 "$OUT/pgbouncer.ini"
 
