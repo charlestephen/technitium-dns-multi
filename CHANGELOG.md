@@ -26,7 +26,16 @@
 - Renovate: dependency dashboard configured with a weekly schedule, PR limits, a 3 day release age, grouped GitHub Actions updates, dnsdist held to 2.1.x, and major updates approved from the dashboard.
 - Fixed the image build: the dnsdist 2.1 repository is signed by key FD380FBB, not the master-branch key that was pinned.
 - Added the dnsdist dashboard and API (port 8083), protected by `DNSDIST_WEB_PASSWORD` and limited by `DNSDIST_WEB_ACL`; it is not started without a password.
-<<<<<<< Updated upstream
+- Removed Kea DHCP (the `ENABLE_KEA` switch, `KEA_*` variables, port 67 and 8000, the `/var/lib/kea` volume). The control agent had no authentication and the template supported a single subnet. Use Technitium's DHCP server or a separate DHCP server.
+- dnsdist's packet cache is now off by default (`DNSDIST_CACHE_ENTRIES=0`). The cache ignores the client address, so with it on an answer fetched for one client was served to others, which broke per-client blocking in Technitium.
+- dnsdist listens on IPv4 and IPv6 by default (`DNSDIST_LISTEN=0.0.0.0:53,[::]:53`; dnsdist binds `[::]` IPv6-only, so each listener setting is now a comma separated list) and the default query and dashboard ACLs include `::1/128`, `fc00::/7` and `fe80::/10`. IPv6 entries are skipped when the kernel has no IPv6.
+- `KEEPALIVED_VIP` takes a comma separated list, so IPv4 and IPv6 virtual addresses can be mixed.
+- `KEEPALIVED_UNICAST_SRC` is optional when `KEEPALIVED_UNICAST_PEERS` is set; before, an empty source produced an invalid configuration. The generated keepalived configuration is now checked at start and the container exits with the error when it is invalid.
+- Fixed `technitium-start.sh` exiting as soon as it received SIGTERM, which left Technitium to be killed in the middle of its shutdown. It now waits for Technitium to exit (exit status 0 and "stopped successfully" in the log).
+- Added tests (`tests/run.sh`) that run the built image: template rendering checked with each program's own validator, per-client answers through dnsdist, IPv4 and IPv6 queries, mixed-family virtual addresses, and a graceful stop. The build workflow runs them before the multi-arch build.
+- The release notes table now lists components that were removed since the previous release.
+- Resolved merge conflict markers that had been committed in this file.
+- Found by running the image: dnsdist's default backend health check (`a.root-servers.net`) makes Technitium recurse to the internet, so on a network with slow or blocked external DNS the backend was marked down and every query timed out. dnsdist now checks its backends with `HEALTH_QUERY_NAME`.
 
 ## v2026.11.9 (2026-11-09)
 
@@ -287,9 +296,3 @@ We look forward to receiving your feedback.
 
 
 **Full Changelog**: https://github.com/microsoft/msquic/compare/v2.6.2...v2.6.3
-
-=======
-- Found by running the image: dnsdist's default backend health check (`a.root-servers.net`) makes Technitium recurse to the internet, so on a network with slow or blocked external DNS the backend was marked down and every query timed out. dnsdist now checks its backends with `HEALTH_QUERY_NAME`.
-- Found by running the image: Kea could not load its hook libraries by bare name; the template now uses the full path, resolved per architecture at start.
-- Found by running the image: Kea's HA module and the control agent both bound the same port; HA multi-threading is now off so HA uses the control agent.
->>>>>>> Stashed changes

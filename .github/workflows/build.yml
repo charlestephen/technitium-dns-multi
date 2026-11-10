@@ -18,7 +18,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Builds the image for the runner's architecture and runs tests/run.sh against it. The multi-arch build
+  # and push only start when this passes.
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build the image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Containerfile
+          platforms: linux/amd64
+          load: true
+          pull: true
+          provenance: false
+          sbom: false
+          tags: technitium-dns-multi:test
+          cache-from: type=gha
+
+      - name: Run the tests
+        run: tests/run.sh technitium-dns-multi:test
+
   image:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -41,7 +69,7 @@ jobs:
         id: up
         run: echo "technitium=$(sed -n 's/^ARG TECHNITIUM_VERSION=//p' Containerfile)" >> "$GITHUB_OUTPUT"
 
-      # ponytail: QEMU arm64 emulation is slow; switch to native arm64 runners + manifest merge if build time hurts
+      # arm64 is built under QEMU emulation, which is slow; native arm64 runners with a manifest merge would be faster
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -134,7 +162,7 @@ jobs:
       - name: Read package versions from the built image
         run: |
           docker run --rm --entrypoint dpkg-query "$GHCR_IMAGE@$DIGEST" \
-            -W -f '${Package}=${Version}\n' keepalived pgbouncer kea-dhcp4-server libmsquic > packages.txt
+            -W -f '${Package}=${Version}\n' keepalived pgbouncer libmsquic > packages.txt
           cat packages.txt
 
       - name: Look up the previous release

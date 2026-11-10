@@ -12,8 +12,29 @@ mkdir -p /run/conf
 # "a,b, c" -> "a","b","c"
 quote_list() { printf '%s' "$1" | tr -d ' ' | sed 's/,/","/g; s/^/"/; s/$/"/'; }
 
+# Every listener setting is a comma separated list of addresses. dnsdist binds IPv6 sockets IPv6-only, so the
+# defaults list an IPv4 and an IPv6 address. IPv6 entries are skipped when the kernel has no IPv6.
+if [ -r /proc/net/if_inet6 ]; then
+    v6=true
+else
+    v6=false
+fi
+addr_list() { # comma separated list -> usable addresses, one per line
+    # the newline matters: read drops a last line that has none
+    printf '%s\n' "$1" | tr -d ' ' | tr ',' '\n' | sed '/^$/d' | while IFS= read -r a; do
+        case "$a" in
+            "["*) if [ "$v6" != "true" ]; then echo "dnsdist-start: IPv6 is not available; skipping $a" >&2; continue; fi ;;
+        esac
+        printf '%s\n' "$a"
+    done
+}
+# one Lua statement per address; $1 is a printf format with %s for the address
+lua_each() { addr_list "$2" | awk -v fmt="$1" '{ printf fmt "\n", $0 }'; }
+
+DNSDIST_LISTEN_LUA=$(addr_list "$DNSDIST_LISTEN" | awk 'NR == 1 { printf "setLocal(\"%s\")\n", $0; next } { printf "addLocal(\"%s\")\n", $0 }')
+
 # loopback is always allowed: the health check queries dnsdist from 127.0.0.1
-DNSDIST_ACL_LUA=$(quote_list "$DNSDIST_ACL,127.0.0.0/8")
+DNSDIST_ACL_LUA=$(quote_list "$DNSDIST_ACL,127.0.0.0/8,::1/128")
 
 proxy=""
 [ "$DNSDIST_BACKEND_PROXY_PROTOCOL" = "true" ] && proxy=", useProxyProtocol=true"
@@ -58,15 +79,15 @@ if [ "$want_tls" = "true" ]; then
     if [ -s "$DNSDIST_TLS_CERT" ] && [ -s "$DNSDIST_TLS_KEY" ]; then
         c=\"$DNSDIST_TLS_CERT\"; k=\"$DNSDIST_TLS_KEY\"
         if [ "$DNSDIST_ENABLE_DOT" = "true" ]; then
-            DNSDIST_TLS_LUA="${DNSDIST_TLS_LUA}addTLSLocal(\"${DNSDIST_DOT_LISTEN}\", $c, $k)
+            DNSDIST_TLS_LUA="${DNSDIST_TLS_LUA}$(lua_each "addTLSLocal(\"%s\", $c, $k)" "$DNSDIST_DOT_LISTEN")
 "
         fi
         if [ "$DNSDIST_ENABLE_DOH" = "true" ]; then
-            DNSDIST_TLS_LUA="${DNSDIST_TLS_LUA}addDOHLocal(\"${DNSDIST_DOH_LISTEN}\", $c, $k, \"${DNSDIST_DOH_PATH}\")
+            DNSDIST_TLS_LUA="${DNSDIST_TLS_LUA}$(lua_each "addDOHLocal(\"%s\", $c, $k, \"${DNSDIST_DOH_PATH}\")" "$DNSDIST_DOH_LISTEN")
 "
         fi
         if [ "$DNSDIST_ENABLE_DOQ" = "true" ]; then
-            DNSDIST_TLS_LUA="${DNSDIST_TLS_LUA}addDOQLocal(\"${DNSDIST_DOQ_LISTEN}\", $c, $k)
+            DNSDIST_TLS_LUA="${DNSDIST_TLS_LUA}$(lua_each "addDOQLocal(\"%s\", $c, $k)" "$DNSDIST_DOQ_LISTEN")
 "
         fi
     else
@@ -76,7 +97,7 @@ fi
 
 # the rendered file can contain the dashboard password: readable by root only
 umask 077
-export DNSDIST_ACL_LUA DNSDIST_BACKEND_LUA DNSDIST_TLS_LUA DNSDIST_WEB_LUA
+export DNSDIST_LISTEN_LUA DNSDIST_ACL_LUA DNSDIST_BACKEND_LUA DNSDIST_TLS_LUA DNSDIST_WEB_LUA
 envsubst < "$T/dnsdist.conf.tmpl" > "$OUT"
 
 exec dnsdist --supervised -C "$OUT"

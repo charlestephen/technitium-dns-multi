@@ -46,4 +46,7 @@ if [ "${ENABLE_DNSDIST:-true}" = "true" ]; then
     move_dns_listener &
 fi
 
+# A trapped signal ends the first wait early; wait again so the wrapper only exits after Technitium has
+# finished shutting down (supervisord and the container runtime kill anything still running when it exits).
+wait "$pid"
 wait "$pid"

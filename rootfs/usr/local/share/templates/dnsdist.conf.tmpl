@@ -1,5 +1,5 @@
 -- Plain DNS (UDP and TCP)
-setLocal("${DNSDIST_LISTEN}")
+${DNSDIST_LISTEN_LUA}
 setACL({${DNSDIST_ACL_LUA}})
 
 -- Encrypted DNS (DoT, DoH, DoQ); empty when no certificate is available
@@ -11,8 +11,12 @@ ${DNSDIST_WEB_LUA}
 -- Backends
 ${DNSDIST_BACKEND_LUA}
 
-pc = newPacketCache(${DNSDIST_CACHE_ENTRIES}, {maxTTL=86400, minTTL=0, temporaryFailureTTL=60, staleTTL=60})
-getPool(""):setCache(pc)
+-- Packet cache. Entries are keyed by the query alone, not by client address, so keep it off (0) when the
+-- backend answers differently per client, for example Technitium client groups with their own block lists.
+if ${DNSDIST_CACHE_ENTRIES} > 0 then
+  pc = newPacketCache(${DNSDIST_CACHE_ENTRIES}, {maxTTL=86400, minTTL=0, temporaryFailureTTL=60, staleTTL=60})
+  getPool(""):setCache(pc)
+end
 
 -- 0 disables per-client rate limiting
 if ${DNSDIST_MAX_QPS_PER_IP} > 0 then

@@ -10,17 +10,4 @@ vrrp_script chk_dns {
     rise 2
 }
 
-vrrp_instance DNS {
-    state ${KEEPALIVED_STATE}
-    interface ${KEEPALIVED_INTERFACE}
-    virtual_router_id ${KEEPALIVED_VRID}
-    priority ${KEEPALIVED_PRIORITY}
-    advert_int 1
-    ${KEEPALIVED_UNICAST_BLOCK}
-    virtual_ipaddress {
-        ${KEEPALIVED_VIP}
-    }
-    track_script {
-        chk_dns
-    }
-}
+${KEEPALIVED_INSTANCES}

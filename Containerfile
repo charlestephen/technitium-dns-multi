@@ -39,7 +39,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && apt-get update && apt-get install -y --no-install-recommends \
         supervisor gettext-base openssl tar \
         "dnsdist=${DNSDIST_VERSION}-*" keepalived pgbouncer \
-        kea-dhcp4-server kea-ctrl-agent \
     && rm -rf /var/lib/apt/lists/*
 
 # Fail the build if a runtime requirement is missing: libmsquic (Technitium DoQ), dig (health check),
@@ -47,7 +46,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 RUN dpkg-query -W libmsquic \
     && command -v dig >/dev/null \
     && id postgres >/dev/null \
-    && ls /usr/lib/*/kea/hooks/libdhcp_ha.so /usr/lib/*/kea/hooks/libdhcp_lease_cmds.so >/dev/null \
     && dnsdist --version 2>&1 | tee /dev/stderr | grep -i quic >/dev/null
 
 # acme.sh, pinned. Config and certificates live in /var/lib/acme.sh (volume).
@@ -73,17 +71,16 @@ ENV ENABLE_TECHNITIUM=true \
     ENABLE_DNSDIST=true \
     ENABLE_KEEPALIVED=true \
     ENABLE_PGBOUNCER=false \
-    ENABLE_KEA=false \
     ENABLE_ACME=false \
     DNS_SERVER_WEB_SERVICE_WWW_FOLDER_PATH=/opt/technitium-console \
     TECHNITIUM_DNS_LISTEN=127.0.0.1:5353 \
     TECHNITIUM_PROXY_PORT=538 \
     TECHNITIUM_PROXY_ACL=127.0.0.1 \
-    DNSDIST_LISTEN=0.0.0.0:53 \
+    DNSDIST_LISTEN=0.0.0.0:53,[::]:53 \
     DNSDIST_BACKENDS=127.0.0.1:538 \
     DNSDIST_BACKEND_PROXY_PROTOCOL=true \
     DNSDIST_WEB_LISTEN=0.0.0.0:8083 \
-    DNSDIST_WEB_ACL=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 \
+    DNSDIST_WEB_ACL=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7,fe80::/10 \
     DNSDIST_WEB_PASSWORD= \
     DNSDIST_WEB_API_KEY= \
     DNSDIST_TLS_CERT=/etc/dns/certs/fullchain.pem \
@@ -91,12 +88,12 @@ ENV ENABLE_TECHNITIUM=true \
     DNSDIST_ENABLE_DOT=true \
     DNSDIST_ENABLE_DOH=true \
     DNSDIST_ENABLE_DOQ=true \
-    DNSDIST_DOT_LISTEN=0.0.0.0:853 \
-    DNSDIST_DOH_LISTEN=0.0.0.0:443 \
+    DNSDIST_DOT_LISTEN=0.0.0.0:853,[::]:853 \
+    DNSDIST_DOH_LISTEN=0.0.0.0:443,[::]:443 \
     DNSDIST_DOH_PATH=/dns-query \
-    DNSDIST_DOQ_LISTEN=0.0.0.0:853 \
-    DNSDIST_ACL=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 \
-    DNSDIST_CACHE_ENTRIES=100000 \
+    DNSDIST_DOQ_LISTEN=0.0.0.0:853,[::]:853 \
+    DNSDIST_ACL=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7,fe80::/10 \
+    DNSDIST_CACHE_ENTRIES=0 \
     DNSDIST_MAX_QPS_PER_IP=0 \
     KEEPALIVED_INTERFACE=eth0 \
     KEEPALIVED_VIP=192.168.1.53/24 \
@@ -114,28 +111,16 @@ ENV ENABLE_TECHNITIUM=true \
     PGBOUNCER_POOL_MODE=transaction \
     PGBOUNCER_MAX_CLIENT_CONN=1000 \
     PGBOUNCER_DEFAULT_POOL_SIZE=20 \
-    KEA_INTERFACE=eth0 \
-    KEA_SUBNET=192.168.1.0/24 \
-    KEA_POOL="192.168.1.100 - 192.168.1.199" \
-    KEA_ROUTERS=192.168.1.1 \
-    KEA_DNS_SERVERS=192.168.1.53 \
-    KEA_DOMAIN=local \
-    KEA_LEASE_SECONDS=3600 \
-    KEA_HA_ROLE=primary \
-    KEA_HA_PRIMARY_ADDR=192.168.1.10 \
-    KEA_HA_SECONDARY_ADDR=192.168.1.11 \
-    KEA_CTRL_BIND=0.0.0.0 \
-    KEA_CTRL_PORT=8000 \
     ACME_EMAIL= \
     ACME_DOMAINS= \
     ACME_DNS_PROVIDER= \
     ACME_SERVER=letsencrypt \
     ACME_PFX_PASSWORD=
 
-# DNS, DHCP, DoT/DoQ, DoH, web console (HTTP/HTTPS), PgBouncer, Kea control agent, dnsdist dashboard
-EXPOSE 53/udp 53/tcp 67/udp 443/tcp 443/udp 853/tcp 853/udp 5380/tcp 53443/tcp 6432/tcp 8000/tcp 8083/tcp
+# DNS, DoT/DoQ, DoH, web console (HTTP/HTTPS), PgBouncer, dnsdist dashboard
+EXPOSE 53/udp 53/tcp 443/tcp 443/udp 853/tcp 853/udp 5380/tcp 53443/tcp 6432/tcp 8083/tcp
 
-VOLUME ["/etc/dns", "/var/lib/acme.sh", "/var/lib/kea"]
+VOLUME ["/etc/dns", "/var/lib/acme.sh"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD ["/usr/local/bin/healthcheck.sh"]

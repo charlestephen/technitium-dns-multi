@@ -5,13 +5,12 @@ A single container that bundles a highly available DNS stack around
 
 | Component | Role |
 |---|---|
-| [Technitium DNS Server](https://technitium.com/dns/) | Authoritative and recursive DNS, web console; its built-in DHCP server is not used when Kea is enabled |
+| [Technitium DNS Server](https://technitium.com/dns/) | Authoritative and recursive DNS, web console |
 | [Technitium Console](https://github.com/byGarcia/technitium-console) | Alternative web UI (served from Technitium's web folder) |
 | [dnsdist](https://dnsdist.org/) | Front end for plain DNS, DNS over TLS, DNS over HTTPS and DNS over QUIC; caches, applies ACL/rate limits, load balances across backends |
 | [keepalived](https://www.keepalived.org/) | VRRP virtual IP that fails over when the local DNS path stops answering |
 | [acme.sh](https://github.com/acmesh-official/acme.sh) | Optional DNS-01 certificate issue and renewal, published as a PKCS#12 file |
 | [PgBouncer](https://www.pgbouncer.org/) | Optional PostgreSQL connection pooler |
-| [Kea DHCPv4](https://www.isc.org/kea/) | Optional DHCP with HA load balancing between two nodes |
 
 Each component is switched on or off with an `ENABLE_*` variable. All configuration comes from environment
 variables; config files are rendered from templates at start.
@@ -42,16 +41,11 @@ Run multiple nodes with the same `KEEPALIVED_VIP` and `KEEPALIVED_VRID` and diff
 The optional components sit beside the DNS path:
 
 ```
-DHCP          client ─► Kea DHCPv4 (UDP 67) ◄── lease sync, TCP 8000 ──► Kea on the other node
 Database      application ─► PgBouncer (TCP 6432) ─► PostgreSQL
 Certificates  acme.sh ─► /etc/dns/certs ─┬─► dnsdist (PEM: DoT, DoH, DoQ)
                                          └─► Technitium web console (PKCS#12)
 ```
 
-- **Kea** (`ENABLE_KEA`) answers DHCP on the node's own address, not on the virtual IP. Two nodes run Kea in HA
-  load-balancing mode and share leases through the Kea control agent, so DHCP fails over by itself and does not depend on
-  keepalived. Kea hands out the virtual IP as the DNS server (`KEA_DNS_SERVERS`). It replaces Technitium's own DHCP
-  server, which has no failover. See [Kea DHCP](#kea-dhcp-ha-load-balancing).
 - **PgBouncer** (`ENABLE_PGBOUNCER`) pools connections to PostgreSQL servers you name in `PGBOUNCER_DATABASES`.
   See [PgBouncer](#pgbouncer).
 - **acme.sh** (`ENABLE_ACME`) obtains and renews the certificate used by dnsdist and the Technitium web console, and
@@ -77,7 +71,6 @@ sudo podman run -d --name technitium-dns-multi --hostname technitium-dns-multi \
   --env-file .env \
   -v dns-config:/etc/dns \
   -v acme:/var/lib/acme.sh \
-  -v kea:/var/lib/kea \
   ghcr.io/charlestephen/technitium-dns-multi:latest
 ```
 
@@ -108,7 +101,6 @@ Set variables with `--env-file .env` or `-e`. [.env.example](.env.example) lists
 | `ENABLE_DNSDIST` | `true` | Run dnsdist in front of Technitium. When `true`, Technitium is moved to `TECHNITIUM_DNS_LISTEN`. |
 | `ENABLE_KEEPALIVED` | `true` | Run keepalived and manage the virtual IP. |
 | `ENABLE_PGBOUNCER` | `false` | Run PgBouncer. |
-| `ENABLE_KEA` | `false` | Run Kea DHCPv4 and the Kea control agent. |
 | `ENABLE_ACME` | `false` | Run acme.sh certificate issue and renewal. |
 
 ### Technitium (image settings)
@@ -183,25 +175,25 @@ These are passed straight to Technitium. Upstream reads them [only when the DNS 
 
 | Variable | Default | Description |
 |---|---|---|
-| `DNSDIST_LISTEN` | `0.0.0.0:53` | Address and port dnsdist listens on. |
+| `DNSDIST_LISTEN` | `0.0.0.0:53,[::]:53` | Comma separated addresses and ports dnsdist listens on. `[::]` is IPv6 only, so the default lists one IPv4 and one IPv6 address; IPv6 entries are skipped when the kernel has no IPv6. The DoT, DoH and DoQ listen settings work the same way. |
 | `DNSDIST_BACKENDS` | `127.0.0.1:538` | Comma separated `address:port` list of backend DNS servers. The default is Technitium's PROXY protocol port. |
 | `DNSDIST_BACKEND_PROXY_PROTOCOL` | `true` | Send the PROXY protocol header to every backend. Set `false` for backends that do not accept it. |
 | `DNSDIST_ENABLE_DOT` | `true` | Serve DNS over TLS. Needs a certificate. |
 | `DNSDIST_ENABLE_DOH` | `true` | Serve DNS over HTTPS. Needs a certificate. |
 | `DNSDIST_ENABLE_DOQ` | `true` | Serve DNS over QUIC. Needs a certificate. |
-| `DNSDIST_DOT_LISTEN` | `0.0.0.0:853` | DoT address and TCP port. |
-| `DNSDIST_DOH_LISTEN` | `0.0.0.0:443` | DoH address and TCP port. |
+| `DNSDIST_DOT_LISTEN` | `0.0.0.0:853,[::]:853` | DoT addresses and TCP port. |
+| `DNSDIST_DOH_LISTEN` | `0.0.0.0:443,[::]:443` | DoH addresses and TCP port. |
 | `DNSDIST_DOH_PATH` | `/dns-query` | URL path that accepts DoH queries. |
-| `DNSDIST_DOQ_LISTEN` | `0.0.0.0:853` | DoQ address and UDP port. |
+| `DNSDIST_DOQ_LISTEN` | `0.0.0.0:853,[::]:853` | DoQ addresses and UDP port. |
 | `DNSDIST_WEB_PASSWORD` | empty | Password for the dnsdist dashboard and API (any user name). The dashboard is only started when this or `DNSDIST_WEB_PASSWORD_FILE` is set. |
 | `DNSDIST_WEB_PASSWORD_FILE` | empty | Path of a file holding the dashboard password. |
 | `DNSDIST_WEB_API_KEY` | empty | Optional API key for scripts, sent as the `X-API-Key` header. `DNSDIST_WEB_API_KEY_FILE` reads it from a file. |
-| `DNSDIST_WEB_LISTEN` | `0.0.0.0:8083` | Address and TCP port of the dashboard. |
-| `DNSDIST_WEB_ACL` | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` | Comma separated networks allowed to reach the dashboard. |
+| `DNSDIST_WEB_LISTEN` | `0.0.0.0:8083` | Address and TCP port of the dashboard (a single address; use `[::]:8083` for IPv6). |
+| `DNSDIST_WEB_ACL` | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7,fe80::/10` | Comma separated networks allowed to reach the dashboard. |
 | `DNSDIST_TLS_CERT` | `/etc/dns/certs/fullchain.pem` | Certificate chain in PEM format, used for DoT, DoH and DoQ. |
 | `DNSDIST_TLS_KEY` | `/etc/dns/certs/key.pem` | Private key in PEM format. |
-| `DNSDIST_ACL` | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` | Comma separated networks allowed to query. |
-| `DNSDIST_CACHE_ENTRIES` | `100000` | Packet cache size in entries. |
+| `DNSDIST_ACL` | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7,fe80::/10` | Comma separated networks allowed to query. Loopback is always allowed. Add your global IPv6 prefix here if clients use one. |
+| `DNSDIST_CACHE_ENTRIES` | `0` | Packet cache size in entries; `0` disables the cache. See [Packet cache and per-client blocking](#packet-cache-and-per-client-blocking). |
 | `DNSDIST_MAX_QPS_PER_IP` | `0` | Queries per second allowed per client address; `0` disables the limit. |
 
 ### keepalived
@@ -209,12 +201,12 @@ These are passed straight to Technitium. Upstream reads them [only when the DNS 
 | Variable | Default | Description |
 |---|---|---|
 | `KEEPALIVED_INTERFACE` | `eth0` | Interface that carries VRRP and the virtual IP. |
-| `KEEPALIVED_VIP` | `192.168.1.53/24` | Virtual IP address with prefix length. |
+| `KEEPALIVED_VIP` | `192.168.1.53/24` | Virtual IP addresses with prefix length, comma separated. IPv4 and IPv6 can be mixed, for example `192.168.1.53/24,fd00:1::53/64`. |
 | `KEEPALIVED_VRID` | `53` | VRRP virtual router ID. Same on every node, unique on the LAN. |
 | `KEEPALIVED_STATE` | `BACKUP` | Initial VRRP state (`MASTER` or `BACKUP`). |
 | `KEEPALIVED_PRIORITY` | `100` | VRRP priority; the highest healthy node holds the virtual IP. |
-| `KEEPALIVED_UNICAST_SRC` | empty | This node's address for unicast VRRP. Empty uses multicast. |
-| `KEEPALIVED_UNICAST_PEERS` | empty | Comma separated peer addresses for unicast VRRP. |
+| `KEEPALIVED_UNICAST_SRC` | empty | This node's address for unicast VRRP. Optional when `KEEPALIVED_UNICAST_PEERS` is set; empty uses the interface address. |
+| `KEEPALIVED_UNICAST_PEERS` | empty | Comma separated peer addresses for unicast VRRP. Empty uses multicast. |
 | `HEALTH_QUERY_NAME` | `localhost` | Name used by the keepalived and container health checks, and by dnsdist to check its backends. It must be a name the backend answers without recursing to the internet. |
 
 ### PgBouncer
@@ -239,23 +231,6 @@ These are passed straight to Technitium. Upstream reads them [only when the DNS 
 | `ACME_EMAIL` | empty | Account email address. |
 | `ACME_SERVER` | `letsencrypt` | ACME CA name or directory URL. |
 | `ACME_PFX_PASSWORD` | empty | Password for the generated PKCS#12 file. |
-
-### Kea DHCPv4
-
-| Variable | Default | Description |
-|---|---|---|
-| `KEA_INTERFACE` | `eth0` | Interface Kea serves DHCP on. |
-| `KEA_SUBNET` | `192.168.1.0/24` | Subnet served. |
-| `KEA_POOL` | `192.168.1.100 - 192.168.1.199` | Address pool. |
-| `KEA_ROUTERS` | `192.168.1.1` | Default gateway handed to clients. |
-| `KEA_DNS_SERVERS` | `192.168.1.53` | DNS servers handed to clients; normally the keepalived virtual IP. |
-| `KEA_DOMAIN` | `local` | Domain name handed to clients. |
-| `KEA_LEASE_SECONDS` | `3600` | Lease lifetime in seconds. |
-| `KEA_HA_ROLE` | `primary` | `primary` on one node, `secondary` on the other. |
-| `KEA_HA_PRIMARY_ADDR` | `192.168.1.10` | Address of the primary node's control agent. |
-| `KEA_HA_SECONDARY_ADDR` | `192.168.1.11` | Address of the secondary node's control agent. |
-| `KEA_CTRL_BIND` | `0.0.0.0` | Address the Kea control agent listens on. |
-| `KEA_CTRL_PORT` | `8000` | Port the Kea control agent listens on. |
 
 Config templates are in `rootfs/usr/local/share/templates`. Mount a directory over it to replace them.
 
@@ -290,11 +265,22 @@ Set `ENABLE_PGBOUNCER=true`, `PGBOUNCER_DATABASES` and mount a `userlist.txt` at
 Separate several entries with `;`:
 
 ```sh
-PGBOUNCER_DATABASES=dns = host=10.0.0.5 port=5432 dbname=technitium; dhcp = host=10.0.0.5 port=5432 dbname=kea
+PGBOUNCER_DATABASES=dns = host=10.0.0.5 port=5432 dbname=technitium; app = host=10.0.0.5 port=5432 dbname=app
 ```
 
-Clients connect to `PGBOUNCER_LISTEN_PORT` (default 6432) and use the logical name (`dns` or `dhcp`) as the database
+Clients connect to `PGBOUNCER_LISTEN_PORT` (default 6432) and use the logical name (`dns` or `app`) as the database
 name. The real database name, host and port can then change without touching the clients.
+
+## Packet cache and per-client blocking
+
+dnsdist sends the real client address to Technitium (PROXY protocol), so Technitium can apply different block lists
+to different clients, for example with the Advanced Blocking app's client groups. dnsdist's packet cache is keyed by the
+query only, not by the client. With the cache on, an answer fetched for one client is served to every other client, which
+defeats those per-client rules: a client in a group that bypasses blocking can cause an unblocked answer to be served to
+a client that should have been blocked.
+
+For that reason the cache is off by default (`DNSDIST_CACHE_ENTRIES=0`). Technitium has its own cache, so DNS stays
+fast. Set `DNSDIST_CACHE_ENTRIES` to a positive number only if every client should get the same answers.
 
 ## dnsdist dashboard
 
@@ -314,32 +300,34 @@ open `http://<node address>:8083/`. Log in with any user name and that password.
 
 ## Requirements
 
-- **Capabilities:** `NET_ADMIN` (keepalived adds the virtual IP), `NET_RAW` (VRRP and DHCP raw sockets) and
+- **Capabilities:** `NET_ADMIN` (keepalived adds the virtual IP), `NET_RAW` (VRRP raw sockets) and
   `NET_BIND_SERVICE` (ports below 1024).
-- **Networking:** DHCP and VRRP need layer 2 access to the LAN: use macvlan or host networking.
+- **Networking:** VRRP needs layer 2 access to the LAN: use macvlan or host networking.
 - **Ports:** 53 UDP/TCP (DNS), 853 TCP (DoT), 853 UDP (DoQ), 443 TCP (DoH), 5380/53443 TCP (Technitium web console),
-  67 UDP (DHCP), 6432 TCP (PgBouncer), 8000 TCP (Kea control agent, peer only), 8083 TCP (dnsdist dashboard).
+  6432 TCP (PgBouncer), 8083 TCP (dnsdist dashboard).
 - **QUIC:** DoQ needs UDP 853 to be reachable. Technitium uses `libmsquic`, which the upstream Technitium image installs, for
   outbound DNS over QUIC (for example `DNS_SERVER_FORWARDER_PROTOCOL=Quic`). The build verifies that it is present.
 - **Technitium encrypted DNS:** leave Technitium's own DoT, DoH and DoQ listeners off. The container disables them, and
   dnsdist serves those protocols on the same ports.
 - **Admin password:** `DNS_SERVER_ADMIN_PASSWORD` (or `_FILE`) must stay set while `ENABLE_DNSDIST=true`, because the container logs in to
   the Technitium API on every start.
-- **Clocks:** Kea HA needs the two nodes' clocks to agree within a few seconds. Keep NTP running on the hosts.
 - **PgBouncer:** the file at `PGBOUNCER_AUTH_FILE` must exist and be readable by the `postgres` user inside the container.
-- **Volumes:** persist `/etc/dns` (Technitium state and certificates), `/var/lib/acme.sh` and `/var/lib/kea`.
+- **Volumes:** persist `/etc/dns` (Technitium state and certificates) and `/var/lib/acme.sh`.
 
-## Kea DHCP (HA load balancing)
+## Tests
 
-Technitium's DHCP server cannot fail over, so for redundant DHCP enable Kea and leave Technitium's DHCP scopes
-disabled (both would answer on UDP 67).
+`tests/run.sh` runs a built image through the scenarios below. CI runs it before the multi-arch build.
 
-- Run one node with `KEA_HA_ROLE=primary` and the other with `KEA_HA_ROLE=secondary`; set `KEA_HA_PRIMARY_ADDR`
-  and `KEA_HA_SECONDARY_ADDR` to the nodes' addresses.
-- In `load-balancing` mode each node answers about half of the clients and takes over the other half when its peer
-  stops responding. Leases are replicated between the nodes over the Kea control agent (`KEA_CTRL_PORT`).
-- The control agent API is unauthenticated. Restrict TCP `KEA_CTRL_PORT` to the peer node and set `KEA_CTRL_BIND`.
-- DHCP needs layer 2 access: use macvlan or host networking, not a bridged published-port setup.
+```sh
+docker build -t technitium-dns-multi:test -f Containerfile .
+tests/run.sh technitium-dns-multi:test      # ENGINE=podman to use podman
+```
+
+- Configuration rendering for several environments, each checked with the program's own validator (`dnsdist --check-config`, `keepalived -t`).
+- dnsdist with a stand-in backend that answers by client address: one client's answer must not reach another, and IPv4 and IPv6 clients reach the backend.
+- A full start: all services running, virtual addresses assigned, IPv4 and IPv6 queries answered, and a graceful stop.
+
+The suites install `python3` in a throwaway container with apt, so they need network access.
 
 ## License
 
@@ -360,5 +348,4 @@ processes; they are not combined into a single program with this repository's fi
 | dnsdist | GPL-2.0 |
 | keepalived | GPL-2.0 |
 | PgBouncer | ISC |
-| Kea | MPL-2.0 |
 | libmsquic | MIT |

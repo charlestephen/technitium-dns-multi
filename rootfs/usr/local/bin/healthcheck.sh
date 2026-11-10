@@ -4,7 +4,8 @@
 # when the server could answer (NOERROR or NXDOMAIN); SERVFAIL, REFUSED and timeouts do not,
 # so a dead Technitium behind a running dnsdist is detected.
 if [ "${ENABLE_DNSDIST:-true}" = "true" ]; then
-    port=${DNSDIST_LISTEN##*:}
+    first=${DNSDIST_LISTEN%%,*}
+    port=${first##*:}
 else
     port=53
 fi

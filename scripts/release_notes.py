@@ -96,11 +96,6 @@ def dnsdist_notes(version):
     return None
 
 
-def kea_notes(version):
-    text = get(f"https://downloads.isc.org/isc/kea/{version}/Kea-{version}-ReleaseNotes.txt")
-    return "```text\n" + text.replace("```", "'''").strip() + "\n```" if text else None
-
-
 def pgbouncer_tag(v):
     return "pgbouncer_" + v.replace(".", "_")
 
@@ -123,12 +118,14 @@ COMPONENTS = [
     ("pgbouncer", "PgBouncer", "dpkg:pgbouncer",
      lambda v: github_release("pgbouncer/pgbouncer", pgbouncer_tag(v)),
      lambda v: f"https://github.com/pgbouncer/pgbouncer/releases/tag/{pgbouncer_tag(v)}"),
-    ("kea", "Kea DHCP", "dpkg:kea-dhcp4-server", kea_notes,
-     lambda v: f"https://downloads.isc.org/isc/kea/{v}/Kea-{v}-ReleaseNotes.txt"),
     ("msquic", "libmsquic (Technitium DNS over QUIC)", "dpkg:libmsquic",
      lambda v: github_release("microsoft/msquic", f"v{v}"),
      lambda v: f"https://github.com/microsoft/msquic/releases/tag/v{v}"),
 ]
+
+
+# Components that were bundled earlier, so a release that drops one can say so.
+FORMER = {"kea": "Kea DHCP"}
 
 
 def read_versions(containerfile, packages):
@@ -174,6 +171,8 @@ def build(cur, prev, tag, today):
             title = f"### {name} {up}" + (f" (was {up_old})" if up_old else "")
             body = cap(notes, link(up)) if notes else f"No machine-readable release notes. See {link(up)}."
             sections.append(f"{title}\n\n{body}")
+    for key in sorted(set(prev) - set(cur)):
+        rows.append(f"| {FORMER.get(key, key)} | | removed | |")
     core = ["## Bundled versions", "", "| Component | Version | Change | Release notes |", "|---|---|---|---|", *rows]
     if sections:
         core += ["", "## Upstream release notes", "", "\n\n".join(sections)]
@@ -206,6 +205,9 @@ def selftest():
     assert nest_headings("# A\n```\n# keep\n```\n## B") == "#### A\n```\n# keep\n```\n##### B"
     assert clean("thanks @octocat, fixes #12", "o/r") == "thanks `@octocat`, fixes [#12](https://github.com/o/r/issues/12)"
     assert clean("mail me@example.com") == "mail me@example.com"
+    same = {key: "1.0" for key, *_ in COMPONENTS}
+    table = build(same, {**same, "kea": "2.4.1-3"}, "v2026.1.1", datetime.date(2026, 1, 1))
+    assert "| Kea DHCP | | removed | |" in table, table
     print("selftest ok")
 
 
