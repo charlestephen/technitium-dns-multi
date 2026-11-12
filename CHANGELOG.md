@@ -37,6 +37,22 @@
 - Resolved merge conflict markers that had been committed in this file.
 - Found by running the image: dnsdist's default backend health check (`a.root-servers.net`) makes Technitium recurse to the internet, so on a network with slow or blocked external DNS the backend was marked down and every query timed out. dnsdist now checks its backends with `HEALTH_QUERY_NAME`.
 
+## v2026.11.12 (2026-11-12)
+
+### Bundled versions
+
+| Component | Version | Change | Release notes |
+|---|---|---|---|
+| Technitium DNS Server | 15.6.2 | unchanged | [notes](https://github.com/TechnitiumSoftware/DnsServer/releases/tag/v15.6.2) |
+| Technitium Console | 1.4.1 | unchanged | [notes](https://github.com/byGarcia/technitium-console/releases/tag/v1.4.1) |
+| dnsdist | 2.1.3 | unchanged | [notes](https://dnsdist.org/changelog.html) |
+| acme.sh | 3.1.6 | unchanged | [notes](https://github.com/acmesh-official/acme.sh/releases/tag/3.1.6) |
+| keepalived | 2.2.8 | unchanged | [notes](https://www.keepalived.org/release-notes/Release-2.2.8/) |
+| PgBouncer | 1.22.0 | unchanged | [notes](https://github.com/pgbouncer/pgbouncer/releases/tag/pgbouncer_1_22_0) |
+| libmsquic (Technitium DNS over QUIC) | 2.6.3 | unchanged | [notes](https://github.com/microsoft/msquic/releases/tag/v2.6.3) |
+| Kea DHCP | | removed | |
+
+
 ## v2026.11.9 (2026-11-09)
 
 ### Bundled versions
