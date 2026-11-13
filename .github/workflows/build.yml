@@ -119,6 +119,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Update Docker Hub overview
+        if: env.PUSH == 'true' && env.HUB_ENABLED == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
+        with:
+          username: ${{ env.HUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: charlestephen/technitium-dns-multi
+          short-description: Technitium DNS Server with dnsdist (DoT/DoH/DoQ), keepalived, acme.sh and PgBouncer.
+          readme-filepath: docs/dockerhub.md
+
 
   # Creates a GitHub release and a CHANGELOG.md entry whenever a bundled application's version changed.
   # The notes come from each application's own upstream release notes (scripts/release_notes.py).

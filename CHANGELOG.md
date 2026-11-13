@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a Docker Hub overview (`docs/dockerhub.md`) covering Docker and Docker Compose use, synced to `docker.io/charlestephen/technitium-dns-multi` by the build workflow.
 - Rebuilt the bundle: supervisord with per-service `ENABLE_*` switches, config rendered from templates and environment variables.
 - dnsdist now fronts Technitium (Technitium moved to `127.0.0.1:5353` through its API) instead of both binding port 53.
 - Console is unpacked from the release tarball in the console image; the previous `COPY /target` path does not exist in that image.
