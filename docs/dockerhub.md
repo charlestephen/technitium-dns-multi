@@ -21,7 +21,7 @@ Each component is switched on or off with an `ENABLE_*` variable, and all config
 
 | Tag | Meaning |
 |---|---|
-| `v<year>.<month>.<day>` | A dated release, for example `v2026.11.12`. A release is cut when a bundled application's version changes. A second release on the same day gets a counter, such as `v2026.11.12.2`. |
+| `vYYYY.MM.DD` | A dated release, for example `v2026.11.13`. Month and day are zero-padded. A release is cut when a bundled application's version changes. A second release on the same day gets a counter, such as `v2026.11.13.2`. Releases before 2026-11-13 used unpadded dates, such as `v2026.11.9`. |
 | `latest` | Most recent build of `main`. |
 | `technitium-<version>` | Latest build that bundles that Technitium version, for example `technitium-15.6.2`. |
 | `sha-<commit>` | The image built from that commit. |

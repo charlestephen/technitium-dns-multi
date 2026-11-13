@@ -142,7 +142,7 @@ def read_versions(containerfile, packages):
 
 
 def pick_tag(existing, today):
-    base = f"v{today.year}.{today.month}.{today.day}"
+    base = f"v{today.year}.{today.month:02d}.{today.day:02d}"
     tag, n = base, 1
     while tag in existing:
         n += 1
@@ -200,13 +200,13 @@ def selftest():
     assert upstream("15.6.2") == "15.6.2"
     assert pgbouncer_tag("1.22.1") == "pgbouncer_1_22_1"
     day = datetime.date(2026, 11, 9)
-    assert pick_tag(set(), day) == "v2026.11.9"
-    assert pick_tag({"v2026.11.9", "v2026.11.9.2"}, day) == "v2026.11.9.3"
+    assert pick_tag(set(), day) == "v2026.11.09"
+    assert pick_tag({"v2026.11.09", "v2026.11.09.2"}, day) == "v2026.11.09.3"
     assert nest_headings("# A\n```\n# keep\n```\n## B") == "#### A\n```\n# keep\n```\n##### B"
     assert clean("thanks @octocat, fixes #12", "o/r") == "thanks `@octocat`, fixes [#12](https://github.com/o/r/issues/12)"
     assert clean("mail me@example.com") == "mail me@example.com"
     same = {key: "1.0" for key, *_ in COMPONENTS}
-    table = build(same, {**same, "kea": "2.4.1-3"}, "v2026.1.1", datetime.date(2026, 1, 1))
+    table = build(same, {**same, "kea": "2.4.1-3"}, "v2026.01.01", datetime.date(2026, 1, 1))
     assert "| Kea DHCP | | removed | |" in table, table
     print("selftest ok")
 

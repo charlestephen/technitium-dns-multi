@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Release tags are now zero-padded (`v2026.11.13` instead of `v2026.11.9`) so they sort in date order. Existing tags are unchanged.
 - Added a Docker Hub overview (`docs/dockerhub.md`) covering Docker and Docker Compose use, synced to `docker.io/charlestephen/technitium-dns-multi` by the build workflow.
 - Rebuilt the bundle: supervisord with per-service `ENABLE_*` switches, config rendered from templates and environment variables.
 - dnsdist now fronts Technitium (Technitium moved to `127.0.0.1:5353` through its API) instead of both binding port 53.
